@@ -357,6 +357,8 @@ input:focus, textarea:focus, select:focus {
 
 .rank-book-title { font-weight: bold; font-size: 1.05rem; }
 .rank-book-author { font-size: 0.9rem; color: #666; }
+.rank-book-summary { font-size: 0.85rem; color: #555; margin-top: 0.3rem; line-height: 1.5; }
+.rank-book-link { font-size: 0.8rem; color: #3b6e48; margin-top: 0.2rem; display: inline-block; }
 
 .rank-arrows {
   display: flex;

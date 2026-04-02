@@ -130,6 +130,8 @@
             <div class="rank-book-info">
               <div class="rank-book-title">${escHtml(title)}</div>
               <div class="rank-book-author">by ${escHtml(book.author || '')}</div>
+              ${book.summary ? `<div class="rank-book-summary">${escHtml(book.summary)}</div>` : ''}
+              ${book.link ? `<a href="${escHtml(book.link)}" target="_blank" rel="noopener" class="rank-book-link">View on Goodreads</a>` : ''}
             </div>
             <div class="rank-arrows">
               <button class="arrow-up" ${i === 0 ? 'disabled' : ''} aria-label="Move up">&uarr;</button>
