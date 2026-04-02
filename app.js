@@ -277,7 +277,7 @@ function renderHeader(container) {
   container.innerHTML = `
     <div class="site-header">
       <div class="site-header-inner">
-        <a href="index.html" class="site-title">Sangha Book Group</a>
+        <a href="index.html" class="site-title">Iron Lotus Sangha</a>
         ${round ? `
         <nav class="site-nav">
           <a href="books.html">Books</a>

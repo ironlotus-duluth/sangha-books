@@ -295,22 +295,22 @@ function doPost(e) {
 
             GmailApp.sendEmail(
               data.voterEmail,
-              'Your Vote — ' + data.round + ' — Sangha Book Group',
+              'Your Vote — ' + data.round + ' — Iron Lotus Sangha',
               'Hi ' + data.voterName + ',\n\n' +
               'Thank you for voting in "' + data.round + '"!\n\n' +
               'Here is how you ranked the books:\n\n' +
               rankList + '\n\n' +
               (resultsUrl ? 'Check the current standings anytime:\n' + resultsUrl + '\n\n' : '') +
-              'With gratitude,\nSangha Book Group',
+              'With gratitude,\nIron Lotus Sangha',
               {
-                name: 'Sangha Book Group',
+                name: 'Iron Lotus Sangha',
                 htmlBody:
                   '<p>Hi ' + data.voterName + ',</p>' +
                   '<p>Thank you for voting in <strong>"' + data.round + '"</strong>!</p>' +
                   '<p>Here is how you ranked the books:</p>' +
                   '<ol>' + data.rankings.map(t => '<li>' + t + '</li>').join('') + '</ol>' +
                   (resultsUrl ? '<p><a href="' + resultsUrl + '">Check the current standings anytime</a></p>' : '') +
-                  '<p>With gratitude,<br>Sangha Book Group</p>'
+                  '<p>With gratitude,<br>Iron Lotus Sangha</p>'
               }
             );
           } catch (emailErr) {
