@@ -43,6 +43,56 @@
 
     <div id="adminMsg" class="msg msg-error hidden"></div>
 
+    <!-- How It Works Guide -->
+    <details style="margin-bottom:2rem;">
+      <summary style="cursor:pointer; font-size:1.1rem; font-weight:bold; color:#3b6e48; margin-bottom:0.75rem;">
+        How to run a round (step by step)
+      </summary>
+      <div class="card" style="margin-top:0.5rem;">
+        <p class="card-text" style="margin-bottom:1rem;">
+          Each round follows a simple lifecycle. Here's what to do at each stage:
+        </p>
+
+        <h3 style="color:#4a7c59;">1. Create a new round</h3>
+        <p class="card-text" style="margin-bottom:1rem;">
+          Use the form below to pick a name (e.g. "Fall 2026") and a password. The password is what you'll share with the group so they can access the site. Submissions open automatically when you create a round.
+        </p>
+
+        <h3 style="color:#4a7c59;">2. Collect book suggestions</h3>
+        <p class="card-text" style="margin-bottom:1rem;">
+          Send the group the link (<strong>books.ironlot.us</strong>) and the round password. They'll enter the password and can start suggesting books. You can see all submissions on the "Book Submissions" page, or directly in the Google Sheet under the "Suggestions" tab. To remove a mistaken entry, just delete the row in the sheet.
+        </p>
+
+        <h3 style="color:#4a7c59;">3. Close submissions, open voting</h3>
+        <p class="card-text" style="margin-bottom:1rem;">
+          Once you have enough book suggestions, come back here and click <strong>"Close Submissions"</strong> on the active round. Then click <strong>"Open Voting"</strong>. Let the group know it's time to vote. They'll rank the books by dragging them into their preferred order.
+        </p>
+
+        <h3 style="color:#4a7c59;">4. Wait for votes</h3>
+        <p class="card-text" style="margin-bottom:1rem;">
+          Give the group a week or so to vote. You can check progress on the "Vote Results" page anytime — results update live. If someone provides their email when voting, they'll get an automatic confirmation.
+        </p>
+
+        <h3 style="color:#4a7c59;">5. Complete the round</h3>
+        <p class="card-text" style="margin-bottom:1rem;">
+          When everyone has voted (or you're ready to call it), click <strong>"Complete Round"</strong>. This closes voting and moves the round into the "Past Rounds" archive, which anyone can view without a password.
+        </p>
+
+        <h3 style="color:#4a7c59;">Useful links</h3>
+        <p class="card-text" style="margin-bottom:0.25rem;">
+          Share these with the group as needed:
+        </p>
+        <p class="card-text" style="margin-bottom:0;">
+          <strong>Main site:</strong> <a href="https://books.ironlot.us">books.ironlot.us</a><br>
+          <strong>Suggest a book:</strong> <a href="https://books.ironlot.us/suggest.html">books.ironlot.us/suggest</a><br>
+          <strong>Vote:</strong> <a href="https://books.ironlot.us/vote.html">books.ironlot.us/vote</a><br>
+          <strong>Results:</strong> <a href="https://books.ironlot.us/results.html">books.ironlot.us/results</a><br>
+          <strong>Past rounds:</strong> <a href="https://books.ironlot.us/history.html">books.ironlot.us/history</a> (no password needed)<br>
+          <strong>Google Sheet (data):</strong> Open from your <a href="https://drive.google.com" target="_blank" rel="noopener">Google Drive</a> — look for "Sangha Book Group"
+        </p>
+      </div>
+    </details>
+
     <!-- Create New Round -->
     <div class="card" style="margin-bottom:2rem;">
       <h2>Create New Round</h2>
@@ -61,6 +111,15 @@
       </div>
     </div>
 
+    <!-- Review Books for Active Round -->
+    <div id="bookReviewSection" class="hidden" style="margin-bottom:2rem;">
+      <h2 style="margin-bottom:0.5rem;">Review Books</h2>
+      <p style="color:#666; margin-bottom:1rem; font-size:0.95rem;">
+        Check that every book has a Goodreads link and summary before opening voting.
+      </p>
+      <div id="bookReviewList"></div>
+    </div>
+
     <!-- Existing Rounds -->
     <h2 style="margin-bottom:1rem;">Rounds</h2>
     <div id="roundsList"></div>
@@ -71,6 +130,7 @@
   <script src="app.js"></script>
   <script>
     let adminToken = null;
+    let activeRoundName = null;
 
     // Set up Google Sign-In client ID
     document.getElementById('g_id_onload').setAttribute('data-client_id', GOOGLE_CLIENT_ID);
@@ -100,8 +160,111 @@
         renderHeader(document.getElementById('header'));
 
         renderRounds(rounds);
+
+        // Load books for active round review
+        const activeRound = rounds.find(r => !r.completed);
+        if (activeRound) {
+          activeRoundName = activeRound.name;
+          loadBookReview(activeRound);
+        } else {
+          document.getElementById('bookReviewSection').classList.add('hidden');
+        }
       } catch (err) {
         showMsg('gateMsg', 'Could not connect. Please try again.');
+      }
+    }
+
+    async function loadBookReview(round) {
+      try {
+        const books = await API.get('getSuggestions', {
+          round: round.name,
+          password: round.password
+        });
+        if (books.error || !Array.isArray(books) || !books.length) {
+          document.getElementById('bookReviewSection').classList.add('hidden');
+          return;
+        }
+
+        document.getElementById('bookReviewSection').classList.remove('hidden');
+
+        const missingLinks = books.filter(b => !b.link);
+        const missingSummaries = books.filter(b => !b.summary);
+
+        let headerHtml = '';
+        if (missingLinks.length || missingSummaries.length) {
+          const warnings = [];
+          if (missingLinks.length) warnings.push(`<strong>${missingLinks.length}</strong> missing Goodreads link${missingLinks.length !== 1 ? 's' : ''}`);
+          if (missingSummaries.length) warnings.push(`<strong>${missingSummaries.length}</strong> missing summar${missingSummaries.length !== 1 ? 'ies' : 'y'}`);
+          headerHtml = `<div class="msg msg-warning" style="margin-bottom:1rem;">${warnings.join(' · ')}</div>`;
+        } else {
+          headerHtml = `<div class="msg msg-success" style="margin-bottom:1rem;">All books have links and summaries. Ready for voting!</div>`;
+        }
+
+        const listHtml = books.map(b => {
+          const hasLink = !!b.link;
+          const hasSummary = !!b.summary;
+          return `
+            <div class="card" style="margin-bottom:0.75rem; ${!hasLink || !hasSummary ? 'border-color:#c9a227;' : ''}">
+              <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:0.5rem;">
+                <div>
+                  <div class="card-title">${escHtml(b.title)}</div>
+                  <div class="card-author" style="margin-bottom:0.25rem;">by ${escHtml(b.author)} · suggested by ${escHtml(b.submitter)}</div>
+                </div>
+                <div style="display:flex; gap:0.5rem;">
+                  ${hasLink
+                    ? '<span class="status-badge status-open">Link</span>'
+                    : '<span class="status-badge status-closed">No link</span>'}
+                  ${hasSummary
+                    ? '<span class="status-badge status-open">Summary</span>'
+                    : '<span class="status-badge status-closed">No summary</span>'}
+                </div>
+              </div>
+              ${hasLink ? `<div style="font-size:0.85rem; margin-top:0.25rem;"><a href="${escHtml(b.link)}" target="_blank" rel="noopener">${escHtml(b.link)}</a></div>` : ''}
+              <div style="margin-top:0.75rem;">
+                <label style="font-size:0.95rem;">Summary</label>
+                <textarea id="summary-${encodeURIComponent(b.title)}" style="min-height:60px; margin-bottom:0.5rem;">${escHtml(b.summary || '')}</textarea>
+                <button class="btn btn-small btn-primary" onclick="saveSummary('${escAttr(b.title)}')">Save Summary</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        document.getElementById('bookReviewList').innerHTML = headerHtml + listHtml;
+      } catch (err) {
+        document.getElementById('bookReviewSection').classList.add('hidden');
+      }
+    }
+
+    async function saveSummary(bookTitle) {
+      const textarea = document.getElementById('summary-' + encodeURIComponent(bookTitle));
+      const summary = textarea.value.trim();
+
+      try {
+        const result = await API.adminPost({
+          action: 'adminUpdateSummary',
+          token: adminToken,
+          round: activeRoundName,
+          bookTitle: bookTitle,
+          summary: summary
+        });
+
+        if (result.error) {
+          showMsg('adminMsg', 'Failed to save: ' + result.error);
+          return;
+        }
+
+        // Brief visual feedback
+        const btn = textarea.nextElementSibling;
+        btn.textContent = 'Saved!';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-outline');
+        setTimeout(() => {
+          btn.textContent = 'Save Summary';
+          btn.classList.add('btn-primary');
+          btn.classList.remove('btn-outline');
+        }, 1500);
+      } catch (e) {
+        showMsg('adminMsg', 'Failed to save summary.');
       }
     }
 
