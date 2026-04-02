@@ -13,7 +13,7 @@ const ADMIN_EMAILS = [
 
 // Google OAuth Client ID (from Google Cloud Console)
 // Needed to verify admin sign-in tokens
-const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID_HERE';
+const GOOGLE_CLIENT_ID = '899264795528-7kms1n19ftmfdgj41e4gnds45d2uls37.apps.googleusercontent.com';
 
 // ---------- SHEET HELPERS ----------
 
