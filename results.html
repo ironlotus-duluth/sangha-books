@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Results — Sangha Book Group</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="header"></div>
+  <div class="page-wrap wide">
+    <h1 id="pageTitle">Current Standings</h1>
+    <p class="subtitle">
+      Results are calculated using ranked-choice voting.
+      <a href="vote.html" style="font-size:0.95rem;">Learn how it works &rarr;</a>
+    </p>
+
+    <div id="msg" class="msg msg-error hidden"></div>
+    <div id="results"></div>
+
+    <div id="voterList" class="hidden" style="margin-top:2rem;">
+      <h2>Who has voted</h2>
+      <p id="voterNames" style="color:#555;"></p>
+    </div>
+
+    <div style="margin-top:2rem; text-align:center;">
+      <button class="btn btn-outline btn-small" id="refreshBtn">Refresh results</button>
+    </div>
+
+    <div class="site-footer">Sangha Book Group</div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    if (!requireAuth()) throw 'redirect';
+    renderHeader(document.getElementById('header'));
+    document.getElementById('pageTitle').textContent = `Results — ${Session.getRound()}`;
+
+    loadResults();
+
+    document.getElementById('refreshBtn').addEventListener('click', loadResults);
+
+    async function loadResults() {
+      showLoading('results', 'Loading results...');
+      document.getElementById('voterList').classList.add('hidden');
+
+      try {
+        const [books, votes] = await Promise.all([
+          API.getSuggestions(),
+          API.getVotes()
+        ]);
+
+        if (books.error || votes.error) {
+          showMsg('msg', books.error || votes.error);
+          document.getElementById('results').innerHTML = '';
+          return;
+        }
+
+        if (!votes.length) {
+          document.getElementById('results').innerHTML =
+            '<p class="msg msg-info">No votes have been cast yet. Check back once voting begins!</p>';
+          return;
+        }
+
+        const candidates = books.map(b => b.title);
+        const result = RCV.calculate(votes, candidates);
+        RCV.renderResults(document.getElementById('results'), result, books);
+
+        // Show voter list
+        const names = votes.map(v => v.voter).filter(Boolean);
+        if (names.length) {
+          document.getElementById('voterNames').textContent = names.join(', ');
+          document.getElementById('voterList').classList.remove('hidden');
+        }
+
+      } catch (err) {
+        showMsg('msg', 'Could not load results. Please refresh and try again.');
+        document.getElementById('results').innerHTML = '';
+      }
+    }
+  </script>
+</body>
+</html>

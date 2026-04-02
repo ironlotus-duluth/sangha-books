@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Sangha Book Group</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+  <div id="header"></div>
+
+  <!-- Google Sign-In Gate -->
+  <div id="signInGate" class="gate-wrap">
+    <h1>Admin</h1>
+    <p>Sign in with your authorized Google account to manage the book group.</p>
+    <div id="gateMsg" class="msg msg-error hidden"></div>
+    <div id="g_id_onload"
+         data-client_id=""
+         data-callback="handleSignIn"
+         data-auto_prompt="false">
+    </div>
+    <div class="g_id_signin"
+         data-type="standard"
+         data-size="large"
+         data-theme="outline"
+         data-text="sign_in_with"
+         data-shape="rectangular"
+         data-logo_alignment="left"
+         data-width="300">
+    </div>
+  </div>
+
+  <!-- Admin Panel -->
+  <div id="adminPanel" class="page-wrap wide hidden">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; margin-bottom:1.5rem;">
+      <h1 style="margin:0;">Admin Panel</h1>
+      <div>
+        <span id="adminEmail" style="font-size:0.9rem; color:#666; margin-right:1rem;"></span>
+        <button class="btn btn-outline btn-small" onclick="signOut()">Sign Out</button>
+      </div>
+    </div>
+
+    <div id="adminMsg" class="msg msg-error hidden"></div>
+
+    <!-- Create New Round -->
+    <div class="card" style="margin-bottom:2rem;">
+      <h2>Create New Round</h2>
+      <p class="card-text" style="margin-bottom:1rem;">Starting a new round will close any currently active round.</p>
+      <div style="display:grid; gap:1rem; max-width:400px;">
+        <div>
+          <label for="newRoundName">Round Name</label>
+          <input type="text" id="newRoundName" placeholder="e.g. Spring 2026" style="margin-bottom:0;">
+        </div>
+        <div>
+          <label for="newRoundPassword">Round Password</label>
+          <input type="text" id="newRoundPassword" placeholder="e.g. dharma2026" style="margin-bottom:0;">
+          <p class="hint">This is the password you'll share with the group.</p>
+        </div>
+        <button class="btn btn-primary" id="createRoundBtn">Create Round</button>
+      </div>
+    </div>
+
+    <!-- Existing Rounds -->
+    <h2 style="margin-bottom:1rem;">Rounds</h2>
+    <div id="roundsList"></div>
+
+    <div class="site-footer">Sangha Book Group</div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    let adminToken = null;
+
+    // Set up Google Sign-In client ID
+    document.getElementById('g_id_onload').setAttribute('data-client_id', GOOGLE_CLIENT_ID);
+
+    function handleSignIn(response) {
+      adminToken = response.credential;
+      // Verify with backend
+      loadAdmin();
+    }
+
+    async function loadAdmin() {
+      try {
+        const rounds = await API.adminGet('adminGetRounds', adminToken);
+        if (rounds.error) {
+          showMsg('gateMsg', 'Not authorized. Make sure your Google account is on the admin list.');
+          return;
+        }
+
+        // Decode JWT to get email for display
+        try {
+          const payload = JSON.parse(atob(adminToken.split('.')[1]));
+          document.getElementById('adminEmail').textContent = payload.email;
+        } catch (e) {}
+
+        document.getElementById('signInGate').classList.add('hidden');
+        document.getElementById('adminPanel').classList.remove('hidden');
+        renderHeader(document.getElementById('header'));
+
+        renderRounds(rounds);
+      } catch (err) {
+        showMsg('gateMsg', 'Could not connect. Please try again.');
+      }
+    }
+
+    function signOut() {
+      adminToken = null;
+      document.getElementById('adminPanel').classList.add('hidden');
+      document.getElementById('signInGate').classList.remove('hidden');
+      location.reload();
+    }
+
+    // Create round
+    document.getElementById('createRoundBtn').addEventListener('click', async () => {
+      hideMsg('adminMsg');
+      const name = document.getElementById('newRoundName').value.trim();
+      const pw = document.getElementById('newRoundPassword').value.trim();
+      if (!name || !pw) {
+        showMsg('adminMsg', 'Please provide a round name and password.');
+        return;
+      }
+
+      const btn = document.getElementById('createRoundBtn');
+      btn.disabled = true;
+      btn.textContent = 'Creating...';
+
+      try {
+        const result = await API.adminPost({
+          action: 'adminCreateRound',
+          token: adminToken,
+          roundName: name,
+          roundPassword: pw
+        });
+        if (result.error) {
+          showMsg('adminMsg', result.error);
+        } else {
+          document.getElementById('newRoundName').value = '';
+          document.getElementById('newRoundPassword').value = '';
+          loadAdmin(); // Refresh
+        }
+      } catch (err) {
+        showMsg('adminMsg', 'Failed to create round.');
+      }
+      btn.disabled = false;
+      btn.textContent = 'Create Round';
+    });
+
+    function renderRounds(rounds) {
+      const list = document.getElementById('roundsList');
+      if (!rounds.length) {
+        list.innerHTML = '<p class="msg msg-info">No rounds yet. Create one above!</p>';
+        return;
+      }
+
+      list.innerHTML = rounds.map(r => {
+        const isActive = !r.completed;
+        const created = r.created ? new Date(r.created).toLocaleDateString() : '';
+        const completed = r.completed ? new Date(r.completed).toLocaleDateString() : '';
+
+        return `
+          <div class="card" style="${isActive ? 'border-color:#4a7c59;' : ''}">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:0.5rem;">
+              <div class="card-title">${escHtml(r.name)}</div>
+              <span class="round-label ${isActive ? 'round-active' : 'round-closed'}">
+                ${isActive ? 'Active' : 'Completed ' + completed}
+              </span>
+            </div>
+            <div class="card-meta" style="margin-top:0.5rem; margin-bottom:1rem;">
+              <span>Password: <code>${escHtml(r.password)}</code></span>
+              <span>Created: ${created}</span>
+            </div>
+            ${isActive ? `
+              <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+                <button class="btn btn-small ${r.submissionsOpen ? 'btn-danger' : 'btn-primary'}"
+                        onclick="toggleSubmissions('${escAttr(r.name)}', ${!r.submissionsOpen})">
+                  ${r.submissionsOpen ? 'Close Submissions' : 'Open Submissions'}
+                </button>
+                <button class="btn btn-small ${r.votingOpen ? 'btn-danger' : 'btn-primary'}"
+                        onclick="toggleVoting('${escAttr(r.name)}', ${!r.votingOpen})">
+                  ${r.votingOpen ? 'Close Voting' : 'Open Voting'}
+                </button>
+                <button class="btn btn-small btn-outline"
+                        onclick="completeRound('${escAttr(r.name)}')">
+                  Complete Round
+                </button>
+              </div>
+              <div style="margin-top:0.75rem; font-size:0.9rem; color:#666;">
+                Submissions: <strong>${r.submissionsOpen ? 'Open' : 'Closed'}</strong>
+                &nbsp;&middot;&nbsp;
+                Voting: <strong>${r.votingOpen ? 'Open' : 'Closed'}</strong>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).reverse().join(''); // Most recent first
+    }
+
+    async function toggleSubmissions(roundName, open) {
+      try {
+        await API.adminPost({
+          action: 'adminToggleSubmissions',
+          token: adminToken,
+          roundName,
+          open
+        });
+        loadAdmin();
+      } catch (e) { showMsg('adminMsg', 'Failed to update.'); }
+    }
+
+    async function toggleVoting(roundName, open) {
+      try {
+        await API.adminPost({
+          action: 'adminToggleVoting',
+          token: adminToken,
+          roundName,
+          open
+        });
+        loadAdmin();
+      } catch (e) { showMsg('adminMsg', 'Failed to update.'); }
+    }
+
+    async function completeRound(roundName) {
+      if (!confirm(`Complete the "${roundName}" round? This will close submissions and voting.`)) return;
+      try {
+        await API.adminPost({
+          action: 'adminCompleteRound',
+          token: adminToken,
+          roundName
+        });
+        loadAdmin();
+      } catch (e) { showMsg('adminMsg', 'Failed to complete round.'); }
+    }
+
+    function escHtml(str) {
+      if (!str) return '';
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    function escAttr(str) {
+      return (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    }
+  </script>
+</body>
+</html>

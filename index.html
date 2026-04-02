@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sangha Book Group</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="header"></div>
+
+  <!-- Password Gate -->
+  <div id="gate" class="gate-wrap">
+    <h1>Sangha Book Group</h1>
+    <p>Enter the password you received to get started.</p>
+    <div id="gateMsg" class="msg msg-error hidden"></div>
+    <input type="password" id="gatePassword" placeholder="Round password" autofocus>
+    <br>
+    <button class="btn btn-primary" id="gateBtn" style="width:100%; margin-top:0.5rem;">Enter</button>
+    <p style="margin-top:2rem;">
+      <a href="history.html" style="font-size:0.95rem;">View past rounds (no password needed)</a>
+    </p>
+  </div>
+
+  <!-- Landing Page (shown after auth) -->
+  <div id="landing" class="page-wrap hidden">
+    <h1 id="roundTitle">Book Group</h1>
+    <p class="subtitle" id="roundSubtitle">Welcome! Here's what's happening this round.</p>
+
+    <div id="landingMsg" class="msg msg-info hidden"></div>
+
+    <div id="landingCards" style="display:grid; gap:1rem;">
+      <a href="books.html" class="card" style="text-decoration:none; color:inherit;">
+        <h3>Books Submitted</h3>
+        <p class="card-text" id="bookCount">See which books have been recommended so far.</p>
+      </a>
+
+      <a href="suggest.html" id="suggestCard" class="card" style="text-decoration:none; color:inherit;">
+        <h3>Suggest a Book</h3>
+        <p class="card-text">Recommend a book for the group to consider.</p>
+      </a>
+
+      <a href="vote.html" id="voteCard" class="card" style="text-decoration:none; color:inherit;">
+        <h3>Vote</h3>
+        <p class="card-text">Rank your choices using ranked-choice voting.</p>
+      </a>
+
+      <a href="results.html" class="card" style="text-decoration:none; color:inherit;">
+        <h3>Current Standings</h3>
+        <p class="card-text">See how the vote is shaping up in real time.</p>
+      </a>
+
+      <a href="history.html" class="card" style="text-decoration:none; color:inherit;">
+        <h3>Past Rounds</h3>
+        <p class="card-text">Browse books we've read and voted on before.</p>
+      </a>
+    </div>
+
+    <div class="site-footer">Sangha Book Group</div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    const gate = document.getElementById('gate');
+    const landing = document.getElementById('landing');
+    const gateBtn = document.getElementById('gateBtn');
+    const gatePassword = document.getElementById('gatePassword');
+
+    // If already authenticated, go straight to landing
+    if (Session.isAuthenticated()) {
+      showLanding();
+    }
+
+    gateBtn.addEventListener('click', tryLogin);
+    gatePassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryLogin(); });
+
+    async function tryLogin() {
+      hideMsg('gateMsg');
+      const pw = gatePassword.value.trim();
+      if (!pw) {
+        showMsg('gateMsg', 'Please enter a password.');
+        return;
+      }
+
+      gateBtn.disabled = true;
+      gateBtn.textContent = 'Checking...';
+
+      try {
+        // Try to get the current round with this password
+        const result = await API.getRound('', pw);
+
+        if (result.error) {
+          showMsg('gateMsg', 'That password didn\'t work. Please check and try again.');
+          gateBtn.disabled = false;
+          gateBtn.textContent = 'Enter';
+          return;
+        }
+
+        Session.set(result.name, pw);
+        showLanding();
+      } catch (err) {
+        showMsg('gateMsg', 'Could not connect. Please try again in a moment.');
+        gateBtn.disabled = false;
+        gateBtn.textContent = 'Enter';
+      }
+    }
+
+    async function showLanding() {
+      gate.classList.add('hidden');
+      landing.classList.remove('hidden');
+      renderHeader(document.getElementById('header'));
+
+      document.getElementById('roundTitle').textContent = Session.getRound();
+
+      try {
+        const round = await API.getRound(Session.getRound(), Session.getPassword());
+        if (round.error) {
+          Session.clear();
+          gate.classList.remove('hidden');
+          landing.classList.add('hidden');
+          showMsg('gateMsg', 'Session expired. Please enter the password again.');
+          return;
+        }
+
+        // Update card states
+        if (!round.submissionsOpen) {
+          const suggestCard = document.getElementById('suggestCard');
+          suggestCard.querySelector('p').textContent = 'Submissions are closed for this round.';
+          suggestCard.style.opacity = '0.6';
+        }
+
+        if (!round.votingOpen) {
+          const voteCard = document.getElementById('voteCard');
+          voteCard.querySelector('p').textContent = 'Voting is not open yet.';
+          voteCard.style.opacity = '0.6';
+        }
+
+        // Get book count
+        const books = await API.getSuggestions();
+        if (Array.isArray(books)) {
+          document.getElementById('bookCount').textContent =
+            `${books.length} book${books.length !== 1 ? 's' : ''} submitted so far.`;
+        }
+
+      } catch (err) {
+        // Fail gracefully — landing page still works
+      }
+    }
+  </script>
+</body>
+</html>

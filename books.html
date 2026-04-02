@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Submitted Books — Sangha Book Group</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="header"></div>
+  <div class="page-wrap">
+    <h1 id="pageTitle">Submitted Books</h1>
+    <p class="subtitle" id="pageSubtitle">Books recommended by the group for this round.</p>
+
+    <div id="msg" class="msg msg-error hidden"></div>
+    <div id="bookList"></div>
+    <div class="site-footer">Sangha Book Group</div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    if (!requireAuth()) throw 'redirect';
+    renderHeader(document.getElementById('header'));
+    document.getElementById('pageTitle').textContent = `Books — ${Session.getRound()}`;
+
+    loadBooks();
+
+    async function loadBooks() {
+      showLoading('bookList', 'Loading submitted books...');
+      try {
+        const books = await API.getSuggestions();
+        if (books.error) {
+          showMsg('msg', books.error);
+          document.getElementById('bookList').innerHTML = '';
+          return;
+        }
+        if (!books.length) {
+          document.getElementById('bookList').innerHTML =
+            '<p class="msg msg-info">No books have been submitted yet. <a href="suggest.html">Be the first!</a></p>';
+          return;
+        }
+        renderBooks(books);
+      } catch (err) {
+        showMsg('msg', 'Could not load books. Please refresh and try again.');
+        document.getElementById('bookList').innerHTML = '';
+      }
+    }
+
+    function renderBooks(books) {
+      const list = document.getElementById('bookList');
+      list.innerHTML = books.map(b => `
+        <div class="card">
+          <div class="card-title">${escHtml(b.title)}</div>
+          <div class="card-author">by ${escHtml(b.author)}</div>
+          ${b.summary ? `<div class="card-text">${escHtml(b.summary)}</div>` : ''}
+          <div class="card-meta">
+            ${b.link ? `<a href="${escHtml(b.link)}" target="_blank" rel="noopener">View on GoodReads &rarr;</a>` : ''}
+            ${b.submitter ? `<span style="font-style:italic;">Suggested by ${escHtml(b.submitter)}</span>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function escHtml(str) {
+      if (!str) return '';
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+  </script>
+</body>
+</html>

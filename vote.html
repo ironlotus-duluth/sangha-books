@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vote — Sangha Book Group</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="header"></div>
+  <div class="page-wrap">
+    <h1>Vote for Our Next Book</h1>
+    <p class="subtitle">Rank the books in order of preference using ranked-choice voting.</p>
+
+    <div id="msg" class="msg msg-error hidden"></div>
+
+    <div id="closedMsg" class="msg msg-warning hidden">
+      Voting is not open yet for this round. You'll receive an email or message when it's time to vote.
+    </div>
+
+    <!-- RCV Explainer (collapsible) -->
+    <div id="explainer" style="margin-bottom:2rem;">
+      <details>
+        <summary style="cursor:pointer; font-size:1.1rem; font-weight:bold; color:#3b6e48; margin-bottom:0.75rem;">
+          How does ranked-choice voting work?
+        </summary>
+        <div class="card" style="margin-top:0.5rem;">
+          <p class="card-text" style="margin-bottom:0.75rem;">
+            Instead of picking just one book, you <strong>rank all the books</strong> from your most-preferred (1st) to least-preferred (last).
+          </p>
+          <p class="card-text" style="margin-bottom:0.75rem;">
+            Here's how the winner is determined:
+          </p>
+          <p class="card-text" style="margin-bottom:0.5rem;">
+            <strong>Step 1:</strong> Everyone's first-choice votes are counted. If any book gets more than half the votes, it wins right away.
+          </p>
+          <p class="card-text" style="margin-bottom:0.5rem;">
+            <strong>Step 2:</strong> If no book has a majority, the book with the <em>fewest</em> first-choice votes is eliminated.
+          </p>
+          <p class="card-text" style="margin-bottom:0.5rem;">
+            <strong>Step 3:</strong> If your first choice was eliminated, your vote transfers to your next choice. Then we count again.
+          </p>
+          <p class="card-text">
+            <strong>This repeats</strong> until one book has a majority. The result is that the winning book is one that most people are happy with, even if it wasn't everyone's first pick.
+          </p>
+        </div>
+      </details>
+    </div>
+
+    <!-- Voting Form -->
+    <div id="voteSection" class="hidden">
+      <h2 style="margin-bottom:0.5rem;">Drag to rank, or use the arrows</h2>
+      <p style="color:#666; margin-bottom:1.5rem; font-size:0.95rem;">
+        Your first choice should be at the top. Move books up or down to set your order.
+      </p>
+
+      <ul class="rank-list" id="rankList"></ul>
+
+      <div style="margin-top:2rem; padding-top:1.5rem; border-top:1px solid #ddd;">
+        <label for="voterName" class="required">Your Name</label>
+        <input type="text" id="voterName" placeholder="e.g. Jane Smith" autocomplete="name">
+
+        <label for="voterEmail">Email <span class="optional-tag">(optional)</span></label>
+        <p class="hint">If you provide your email, we'll send you a confirmation of your vote with a link to check the results.</p>
+        <input type="email" id="voterEmail" placeholder="e.g. jane@example.com" autocomplete="email">
+
+        <button class="btn btn-primary" id="submitVoteBtn" style="width:100%;">Submit My Vote</button>
+      </div>
+    </div>
+
+    <!-- Success -->
+    <div id="successMsg" class="msg msg-success hidden" style="text-align:center;">
+      <h2 style="margin-bottom:0.25rem;">Vote received!</h2>
+      <p>Thank you for voting. Your rankings have been recorded.</p>
+      <p id="emailNote" class="hidden" style="margin-top:0.5rem;">A confirmation has been sent to your email.</p>
+      <p style="margin-top:1rem;">
+        <a href="results.html">View the current standings &rarr;</a>
+      </p>
+    </div>
+
+    <div class="site-footer">Sangha Book Group</div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    if (!requireAuth()) throw 'redirect';
+    renderHeader(document.getElementById('header'));
+
+    let books = [];
+    let rankings = []; // Array of book titles in ranked order
+
+    init();
+
+    async function init() {
+      try {
+        // Check round status
+        const round = await API.getRound(Session.getRound(), Session.getPassword());
+        if (!round.votingOpen) {
+          document.getElementById('closedMsg').classList.remove('hidden');
+          return;
+        }
+
+        // Load books
+        const result = await API.getSuggestions();
+        if (result.error) {
+          showMsg('msg', result.error);
+          return;
+        }
+        if (!result.length) {
+          showMsg('msg', 'No books have been submitted yet. Check back later.', 'info');
+          return;
+        }
+
+        books = result;
+        rankings = books.map(b => b.title);
+        renderRankList();
+        document.getElementById('voteSection').classList.remove('hidden');
+      } catch (err) {
+        showMsg('msg', 'Could not load voting data. Please refresh and try again.');
+      }
+    }
+
+    function renderRankList() {
+      const list = document.getElementById('rankList');
+      list.innerHTML = rankings.map((title, i) => {
+        const book = books.find(b => b.title === title) || {};
+        return `
+          <li class="rank-item" data-idx="${i}">
+            <div class="rank-number">${i + 1}</div>
+            <div class="rank-book-info">
+              <div class="rank-book-title">${escHtml(title)}</div>
+              <div class="rank-book-author">by ${escHtml(book.author || '')}</div>
+            </div>
+            <div class="rank-arrows">
+              <button class="arrow-up" ${i === 0 ? 'disabled' : ''} aria-label="Move up">&uarr;</button>
+              <button class="arrow-down" ${i === rankings.length - 1 ? 'disabled' : ''} aria-label="Move down">&darr;</button>
+            </div>
+          </li>
+        `;
+      }).join('');
+
+      initRankList(list, (from, to) => {
+        const item = rankings.splice(from, 1)[0];
+        rankings.splice(to, 0, item);
+        renderRankList();
+      });
+    }
+
+    // Submit vote
+    document.getElementById('submitVoteBtn').addEventListener('click', async () => {
+      hideMsg('msg');
+      const name = document.getElementById('voterName').value.trim();
+      const email = document.getElementById('voterEmail').value.trim();
+
+      if (!name) {
+        showMsg('msg', 'Please enter your name.');
+        return;
+      }
+
+      const btn = document.getElementById('submitVoteBtn');
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+
+      try {
+        const result = await API.submitVote({
+          voterName: name,
+          voterEmail: email,
+          rankings: rankings,
+          resultsUrl: window.location.origin + window.location.pathname.replace('vote.html', 'results.html')
+        });
+
+        if (result.error) {
+          showMsg('msg', result.error);
+          btn.disabled = false;
+          btn.textContent = 'Submit My Vote';
+          return;
+        }
+
+        document.getElementById('voteSection').classList.add('hidden');
+        document.getElementById('explainer').classList.add('hidden');
+        document.getElementById('successMsg').classList.remove('hidden');
+        if (email) document.getElementById('emailNote').classList.remove('hidden');
+      } catch (err) {
+        showMsg('msg', 'Something went wrong. Please try again.');
+        btn.disabled = false;
+        btn.textContent = 'Submit My Vote';
+      }
+    });
+
+    function escHtml(str) {
+      if (!str) return '';
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+  </script>
+</body>
+</html>

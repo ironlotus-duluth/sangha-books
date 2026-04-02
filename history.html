@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Past Rounds — Sangha Book Group</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="header"></div>
+  <div class="page-wrap">
+    <h1>Past Rounds</h1>
+    <p class="subtitle">A record of books we've voted on and read together.</p>
+
+    <div id="msg" class="msg msg-error hidden"></div>
+    <div id="historyList"></div>
+
+    <div class="site-footer">Sangha Book Group</div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    renderHeader(document.getElementById('header'));
+    loadHistory();
+
+    async function loadHistory() {
+      showLoading('historyList', 'Loading past rounds...');
+
+      try {
+        const history = await API.getHistory();
+
+        if (history.error) {
+          showMsg('msg', history.error);
+          document.getElementById('historyList').innerHTML = '';
+          return;
+        }
+
+        if (!history.length) {
+          document.getElementById('historyList').innerHTML =
+            '<p class="msg msg-info">No completed rounds yet. This is our first!</p>';
+          return;
+        }
+
+        renderHistory(history);
+      } catch (err) {
+        showMsg('msg', 'Could not load history. Please refresh and try again.');
+        document.getElementById('historyList').innerHTML = '';
+      }
+    }
+
+    function renderHistory(rounds) {
+      const list = document.getElementById('historyList');
+      list.innerHTML = rounds.map(r => {
+        const date = r.completed ? new Date(r.completed).toLocaleDateString('en-US', {
+          year: 'numeric', month: 'long'
+        }) : '';
+
+        return `
+          <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.75rem;">
+              <h2 style="margin:0;">${escHtml(r.name)}</h2>
+              <span class="round-label round-closed">${date}</span>
+            </div>
+            <p class="card-text" style="color:#666; margin-bottom:0.75rem;">
+              ${r.totalBooks} book${r.totalBooks !== 1 ? 's' : ''} suggested
+              &nbsp;&middot;&nbsp;
+              ${r.totalVoters} voter${r.totalVoters !== 1 ? 's' : ''}
+            </p>
+            ${r.books && r.books.length ? `
+              <div style="margin-top:0.5rem;">
+                <h3 style="margin-bottom:0.5rem;">Books considered:</h3>
+                ${r.books.map(b => `
+                  <div style="padding:0.4rem 0; border-bottom:1px solid #eee;">
+                    <strong>${escHtml(b.title)}</strong> by ${escHtml(b.author)}
+                    ${b.summary ? `<div style="font-size:0.9rem; color:#666; margin-top:0.2rem;">${escHtml(b.summary)}</div>` : ''}
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function escHtml(str) {
+      if (!str) return '';
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+  </script>
+</body>
+</html>

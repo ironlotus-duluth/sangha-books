@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Suggest a Book — Sangha Book Group</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="header"></div>
+  <div class="page-wrap">
+    <h1>Suggest a Book</h1>
+    <p class="subtitle">Recommend a book for the group to consider reading next.</p>
+
+    <div id="msg" class="msg msg-error hidden"></div>
+
+    <div id="closedMsg" class="msg msg-warning hidden">
+      Submissions are closed for this round. Check back when a new round opens!
+    </div>
+
+    <form id="form">
+      <label for="name" class="required">Your Name</label>
+      <p class="hint">So we can follow up if we have questions.</p>
+      <input type="text" id="name" required autocomplete="name" placeholder="e.g. Jane Smith">
+
+      <label for="title" class="required">Book Title</label>
+      <input type="text" id="title" required placeholder="e.g. When Things Fall Apart">
+
+      <label for="author" class="required">Author</label>
+      <input type="text" id="author" required placeholder="e.g. Pema Chödrön">
+
+      <label for="link">Link <span class="optional-tag">(optional)</span></label>
+      <p class="hint">A link to Amazon or GoodReads so people can learn more.</p>
+      <input type="url" id="link" placeholder="https://...">
+
+      <button type="submit" class="btn btn-primary" id="submitBtn">Submit Suggestion</button>
+    </form>
+
+    <div id="successMsg" class="msg msg-success hidden" style="text-align:center;">
+      <h2 style="margin-bottom:0.25rem;">Thank you!</h2>
+      <p>Your book suggestion has been submitted. We'll include it when voting opens.</p>
+      <p style="margin-top:1rem;">
+        <a href="#" id="anotherLink">Submit another suggestion</a>
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+        <a href="books.html">View all submitted books</a>
+      </p>
+    </div>
+
+    <div class="site-footer">Sangha Book Group</div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    if (!requireAuth()) throw 'redirect';
+    renderHeader(document.getElementById('header'));
+
+    const form = document.getElementById('form');
+    const submitBtn = document.getElementById('submitBtn');
+
+    // Check if submissions are open
+    checkStatus();
+
+    async function checkStatus() {
+      try {
+        const round = await API.getRound(Session.getRound(), Session.getPassword());
+        if (!round.submissionsOpen) {
+          form.classList.add('hidden');
+          document.getElementById('closedMsg').classList.remove('hidden');
+        }
+      } catch (e) {}
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideMsg('msg');
+
+      const data = {
+        submitterName: document.getElementById('name').value.trim(),
+        bookTitle: document.getElementById('title').value.trim(),
+        author: document.getElementById('author').value.trim(),
+        link: document.getElementById('link').value.trim()
+      };
+
+      if (!data.submitterName || !data.bookTitle || !data.author) {
+        showMsg('msg', 'Please fill in your name, the book title, and the author.');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting...';
+
+      try {
+        const result = await API.submitSuggestion(data);
+        if (result.error) {
+          showMsg('msg', result.error);
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Submit Suggestion';
+          return;
+        }
+        form.classList.add('hidden');
+        document.getElementById('successMsg').classList.remove('hidden');
+      } catch (err) {
+        showMsg('msg', 'Something went wrong. Please try again.');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Suggestion';
+      }
+    });
+
+    document.getElementById('anotherLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      form.reset();
+      form.classList.remove('hidden');
+      document.getElementById('successMsg').classList.add('hidden');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit Suggestion';
+    });
+  </script>
+</body>
+</html>
