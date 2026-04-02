@@ -378,6 +378,96 @@ input:focus, textarea:focus, select:focus {
 .rank-arrows button:hover { background: #eee; }
 .rank-arrows button:disabled { opacity: 0.3; cursor: not-allowed; }
 
+/* -- Landing Page Grid -- */
+
+.landing-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid #ddd;
+}
+
+.col-heading {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #888;
+  margin-bottom: 0.75rem;
+  font-weight: bold;
+}
+
+.landing-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+.landing-card {
+  display: block;
+  text-decoration: none !important;
+  color: inherit !important;
+  margin-bottom: 0.75rem;
+}
+
+.landing-card:hover {
+  border-color: #4a7c59;
+}
+
+.landing-card.card-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.card-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.3rem;
+}
+
+.card-header-row h3 { margin-bottom: 0; }
+
+/* -- Status Badges -- */
+
+.status-badge {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: bold;
+  padding: 0.2rem 0.65rem;
+  border-radius: 12px;
+  white-space: nowrap;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.status-open {
+  background: #e8f5e9;
+  color: #2c5e3a;
+}
+
+.status-closed {
+  background: #f0f0f0;
+  color: #777;
+}
+
+.status-neutral {
+  background: #e8f0fa;
+  color: #2a4a7c;
+}
+
+@media (max-width: 600px) {
+  .landing-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  .landing-top {
+    flex-direction: column;
+  }
+}
+
 /* -- Footer -- */
 
 .site-footer {

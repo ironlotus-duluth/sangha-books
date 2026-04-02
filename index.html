@@ -12,7 +12,7 @@
   <!-- Password Gate -->
   <div id="gate" class="gate-wrap">
     <h1>Sangha Book Group</h1>
-    <p>Enter the password you received to get started.</p>
+    <p>Enter the round password to get started.</p>
     <div id="gateMsg" class="msg msg-error hidden"></div>
     <input type="password" id="gatePassword" placeholder="Round password" autofocus>
     <br>
@@ -24,39 +24,71 @@
 
   <!-- Landing Page (shown after auth) -->
   <div id="landing" class="page-wrap hidden">
-    <h1 id="roundTitle">Book Group</h1>
-    <p class="subtitle" id="roundSubtitle">Welcome! Here's what's happening this round.</p>
+    <div class="landing-top">
+      <div>
+        <h1 id="roundTitle" style="margin-bottom:0.15rem;">Book Group</h1>
+        <p class="subtitle" style="border:none; padding-bottom:0; margin-bottom:0;">Welcome to this round of the Sangha Book Group.</p>
+      </div>
+      <div>
+        <button class="btn btn-outline btn-small" id="signOutBtn">Sign out</button>
+      </div>
+    </div>
 
     <div id="landingMsg" class="msg msg-info hidden"></div>
 
-    <div id="landingCards" style="display:grid; gap:1rem;">
-      <a href="books.html" class="card" style="text-decoration:none; color:inherit;">
-        <h3>Books Submitted</h3>
-        <p class="card-text" id="bookCount">See which books have been recommended so far.</p>
-      </a>
+    <div class="landing-grid">
 
-      <a href="suggest.html" id="suggestCard" class="card" style="text-decoration:none; color:inherit;">
-        <h3>Suggest a Book</h3>
-        <p class="card-text">Recommend a book for the group to consider.</p>
-      </a>
+      <!-- Column 1: Participate -->
+      <div class="landing-col">
+        <h2 class="col-heading">Participate</h2>
 
-      <a href="vote.html" id="voteCard" class="card" style="text-decoration:none; color:inherit;">
-        <h3>Vote</h3>
-        <p class="card-text">Rank your choices using ranked-choice voting.</p>
-      </a>
+        <a href="suggest.html" id="suggestCard" class="card landing-card">
+          <div class="card-header-row">
+            <h3>Suggest a Book</h3>
+            <span class="status-badge" id="suggestBadge">Loading...</span>
+          </div>
+          <p class="card-text">Recommend a book for the group to read next.</p>
+        </a>
 
-      <a href="results.html" class="card" style="text-decoration:none; color:inherit;">
-        <h3>Current Standings</h3>
-        <p class="card-text">See how the vote is shaping up in real time.</p>
-      </a>
+        <a href="vote.html" id="voteCard" class="card landing-card">
+          <div class="card-header-row">
+            <h3>Cast Your Vote</h3>
+            <span class="status-badge" id="voteBadge">Loading...</span>
+          </div>
+          <p class="card-text">Rank the books in order of your preference.</p>
+        </a>
+      </div>
 
-      <a href="history.html" class="card" style="text-decoration:none; color:inherit;">
-        <h3>Past Rounds</h3>
-        <p class="card-text">Browse books we've read and voted on before.</p>
-      </a>
+      <!-- Column 2: Browse -->
+      <div class="landing-col">
+        <h2 class="col-heading">Browse</h2>
+
+        <a href="books.html" class="card landing-card">
+          <div class="card-header-row">
+            <h3>Book Submissions</h3>
+            <span class="status-badge status-neutral" id="bookCountBadge">&hellip;</span>
+          </div>
+          <p class="card-text">See which books have been recommended this round.</p>
+        </a>
+
+        <a href="results.html" class="card landing-card">
+          <div class="card-header-row">
+            <h3>Vote Results</h3>
+          </div>
+          <p class="card-text">See how the ranked-choice vote is shaping up.</p>
+        </a>
+
+        <a href="history.html" class="card landing-card">
+          <div class="card-header-row">
+            <h3>Past Rounds</h3>
+          </div>
+          <p class="card-text">Browse books and results from previous rounds.</p>
+        </a>
+      </div>
+
     </div>
 
-    <div class="site-footer">Sangha Book Group</div>
+    <div class="site-footer">Iron Lotus Sangha &middot; Duluth</div>
   </div>
 
   <script src="app.js"></script>
@@ -74,6 +106,15 @@
     gateBtn.addEventListener('click', tryLogin);
     gatePassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryLogin(); });
 
+    // Sign out
+    document.getElementById('signOutBtn').addEventListener('click', () => {
+      Session.clear();
+      landing.classList.add('hidden');
+      gate.classList.remove('hidden');
+      gatePassword.value = '';
+      gatePassword.focus();
+    });
+
     async function tryLogin() {
       hideMsg('gateMsg');
       const pw = gatePassword.value.trim();
@@ -86,7 +127,6 @@
       gateBtn.textContent = 'Checking...';
 
       try {
-        // Try to get the current round with this password
         const result = await API.getRound('', pw);
 
         if (result.error) {
@@ -122,24 +162,35 @@
           return;
         }
 
-        // Update card states
-        if (!round.submissionsOpen) {
-          const suggestCard = document.getElementById('suggestCard');
-          suggestCard.querySelector('p').textContent = 'Submissions are closed for this round.';
-          suggestCard.style.opacity = '0.6';
+        // Update suggestion card status
+        const suggestBadge = document.getElementById('suggestBadge');
+        const suggestCard = document.getElementById('suggestCard');
+        if (round.submissionsOpen) {
+          suggestBadge.textContent = 'Open';
+          suggestBadge.className = 'status-badge status-open';
+        } else {
+          suggestBadge.textContent = 'Closed';
+          suggestBadge.className = 'status-badge status-closed';
+          suggestCard.classList.add('card-disabled');
         }
 
-        if (!round.votingOpen) {
-          const voteCard = document.getElementById('voteCard');
-          voteCard.querySelector('p').textContent = 'Voting is not open yet.';
-          voteCard.style.opacity = '0.6';
+        // Update vote card status
+        const voteBadge = document.getElementById('voteBadge');
+        const voteCard = document.getElementById('voteCard');
+        if (round.votingOpen) {
+          voteBadge.textContent = 'Open';
+          voteBadge.className = 'status-badge status-open';
+        } else {
+          voteBadge.textContent = 'Not yet open';
+          voteBadge.className = 'status-badge status-closed';
+          voteCard.classList.add('card-disabled');
         }
 
         // Get book count
         const books = await API.getSuggestions();
         if (Array.isArray(books)) {
-          document.getElementById('bookCount').textContent =
-            `${books.length} book${books.length !== 1 ? 's' : ''} submitted so far.`;
+          const badge = document.getElementById('bookCountBadge');
+          badge.textContent = `${books.length} book${books.length !== 1 ? 's' : ''}`;
         }
 
       } catch (err) {
