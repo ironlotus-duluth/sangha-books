@@ -10,7 +10,7 @@
   <div id="header"></div>
   <div class="page-wrap">
     <h1>Vote for Our Next Book</h1>
-    <p class="subtitle">Rank the books in order of preference using ranked-choice voting.</p>
+    <p class="subtitle">Pick your top 3 choices using ranked-choice voting.</p>
 
     <div id="msg" class="msg msg-error hidden"></div>
 
@@ -26,7 +26,7 @@
         </summary>
         <div class="card" style="margin-top:0.5rem;">
           <p class="card-text" style="margin-bottom:0.75rem;">
-            Instead of picking just one book, you <strong>rank all the books</strong> from your most-preferred (1st) to least-preferred (last).
+            You pick your <strong>top 3 books</strong> in order: 1st choice, 2nd choice, and 3rd choice.
           </p>
           <p class="card-text" style="margin-bottom:0.75rem;">
             Here's how the winner is determined:
@@ -38,10 +38,10 @@
             <strong>Step 2:</strong> If no book has a majority, the book with the <em>fewest</em> first-choice votes is eliminated.
           </p>
           <p class="card-text" style="margin-bottom:0.5rem;">
-            <strong>Step 3:</strong> If your first choice was eliminated, your vote transfers to your next choice. Then we count again.
+            <strong>Step 3:</strong> If your first choice was eliminated, your vote moves to your second choice. Then we count again.
           </p>
           <p class="card-text">
-            <strong>This repeats</strong> until one book has a majority. The result is that the winning book is one that most people are happy with, even if it wasn't everyone's first pick.
+            <strong>This repeats</strong> until one book has a majority. The result is a book that most people are happy with, even if it wasn't everyone's first pick.
           </p>
         </div>
       </details>
@@ -49,12 +49,19 @@
 
     <!-- Voting Form -->
     <div id="voteSection" class="hidden">
-      <h2 style="margin-bottom:0.5rem;">Drag to rank, or use the arrows</h2>
-      <p style="color:#666; margin-bottom:1.5rem; font-size:0.95rem;">
-        Your first choice should be at the top. Move books up or down to set your order.
+      <h2 style="margin-bottom:0.5rem;">Pick your top 3</h2>
+      <p style="color:#666; margin-bottom:1rem; font-size:0.95rem;">
+        Click on a book to select it. Your first click is your 1st choice, second click is your 2nd choice, and third click is your 3rd choice. Click a selected book again to remove it.
       </p>
 
-      <ul class="rank-list" id="rankList"></ul>
+      <div id="selectedList" class="hidden" style="margin-bottom:1.5rem;">
+        <h3 style="margin-bottom:0.5rem;">Your picks:</h3>
+        <ol id="picks" class="rank-list" style="margin-bottom:0.5rem;"></ol>
+        <p style="font-size:0.9rem; color:#666;" id="pickHint">Choose <span id="remainingPicks">3</span> more.</p>
+      </div>
+
+      <h3 style="margin-bottom:0.75rem;" id="availableHeading">Available books:</h3>
+      <div id="bookChoices"></div>
 
       <div style="margin-top:2rem; padding-top:1.5rem; border-top:1px solid #ddd;">
         <label for="voterName" class="required">Your Name</label>
@@ -86,21 +93,20 @@
     if (!requireAuth()) throw 'redirect';
     renderHeader(document.getElementById('header'));
 
+    const MAX_PICKS = 3;
     let books = [];
-    let rankings = []; // Array of book titles in ranked order
+    let picks = []; // Array of selected book titles, in order chosen
 
     init();
 
     async function init() {
       try {
-        // Check round status
         const round = await API.getRound(Session.getRound(), Session.getPassword());
         if (!round.votingOpen) {
           document.getElementById('closedMsg').classList.remove('hidden');
           return;
         }
 
-        // Load books
         const result = await API.getSuggestions();
         if (result.error) {
           showMsg('msg', result.error);
@@ -112,40 +118,81 @@
         }
 
         books = result;
-        rankings = books.map(b => b.title);
-        renderRankList();
+        render();
         document.getElementById('voteSection').classList.remove('hidden');
       } catch (err) {
         showMsg('msg', 'Could not load voting data. Please refresh and try again.');
       }
     }
 
-    function renderRankList() {
-      const list = document.getElementById('rankList');
-      list.innerHTML = rankings.map((title, i) => {
-        const book = books.find(b => b.title === title) || {};
+    function togglePick(title) {
+      const idx = picks.indexOf(title);
+      if (idx !== -1) {
+        picks.splice(idx, 1);
+      } else if (picks.length < MAX_PICKS) {
+        picks.push(title);
+      }
+      render();
+    }
+
+    function render() {
+      // Render selected picks
+      const selectedSection = document.getElementById('selectedList');
+      const picksList = document.getElementById('picks');
+      const hint = document.getElementById('pickHint');
+      const remaining = MAX_PICKS - picks.length;
+
+      if (picks.length > 0) {
+        selectedSection.classList.remove('hidden');
+        const ordinals = ['1st choice', '2nd choice', '3rd choice'];
+        picksList.innerHTML = picks.map((title, i) => {
+          const book = books.find(b => b.title === title) || {};
+          return `
+            <li class="rank-item selected" style="cursor:pointer;" onclick="togglePick('${escAttr(title)}')">
+              <div class="rank-number">${i + 1}</div>
+              <div class="rank-book-info">
+                <div class="rank-book-title">${escHtml(title)}</div>
+                <div class="rank-book-author">by ${escHtml(book.author || '')} — <em>${ordinals[i]}</em></div>
+              </div>
+              <div style="font-size:0.85rem; color:#b44; cursor:pointer; white-space:nowrap;">remove</div>
+            </li>
+          `;
+        }).join('');
+
+        if (remaining > 0) {
+          hint.innerHTML = `Choose <strong>${remaining}</strong> more.`;
+        } else {
+          hint.innerHTML = `All 3 picks made! Scroll down to submit.`;
+          hint.style.color = '#2c5e3a';
+        }
+      } else {
+        selectedSection.classList.add('hidden');
+      }
+
+      // Render available books (not yet picked)
+      const choices = document.getElementById('bookChoices');
+      const available = books.filter(b => !picks.includes(b.title));
+
+      if (available.length === 0 && picks.length === MAX_PICKS) {
+        document.getElementById('availableHeading').classList.add('hidden');
+      } else {
+        document.getElementById('availableHeading').classList.remove('hidden');
+      }
+
+      choices.innerHTML = available.map(b => {
+        const canPick = picks.length < MAX_PICKS;
         return `
-          <li class="rank-item" data-idx="${i}">
-            <div class="rank-number">${i + 1}</div>
-            <div class="rank-book-info">
-              <div class="rank-book-title">${escHtml(title)}</div>
-              <div class="rank-book-author">by ${escHtml(book.author || '')}</div>
-              ${book.summary ? `<div class="rank-book-summary">${escHtml(book.summary)}</div>` : ''}
-              ${book.link ? `<a href="${escHtml(book.link)}" target="_blank" rel="noopener" class="rank-book-link">View on Goodreads</a>` : ''}
-            </div>
-            <div class="rank-arrows">
-              <button class="arrow-up" ${i === 0 ? 'disabled' : ''} aria-label="Move up">&uarr;</button>
-              <button class="arrow-down" ${i === rankings.length - 1 ? 'disabled' : ''} aria-label="Move down">&darr;</button>
-            </div>
-          </li>
+          <div class="card landing-card" style="${canPick ? 'cursor:pointer;' : 'opacity:0.5;'}" ${canPick ? `onclick="togglePick('${escAttr(b.title)}')"` : ''}>
+            <div class="card-title">${escHtml(b.title)}</div>
+            <div class="card-author" style="margin-bottom:0.4rem;">by ${escHtml(b.author)}</div>
+            ${b.summary ? `<div class="card-text" style="font-size:0.9rem; color:#555;">${escHtml(b.summary)}</div>` : ''}
+            ${b.link ? `<a href="${escHtml(b.link)}" target="_blank" rel="noopener" onclick="event.stopPropagation();" style="font-size:0.85rem;">View on Goodreads</a>` : ''}
+          </div>
         `;
       }).join('');
 
-      initRankList(list, (from, to) => {
-        const item = rankings.splice(from, 1)[0];
-        rankings.splice(to, 0, item);
-        renderRankList();
-      });
+      // Enable/disable submit
+      document.getElementById('submitVoteBtn').disabled = picks.length === 0;
     }
 
     // Submit vote
@@ -158,6 +205,10 @@
         showMsg('msg', 'Please enter your name.');
         return;
       }
+      if (picks.length === 0) {
+        showMsg('msg', 'Please select at least one book.');
+        return;
+      }
 
       const btn = document.getElementById('submitVoteBtn');
       btn.disabled = true;
@@ -167,7 +218,7 @@
         const result = await API.submitVote({
           voterName: name,
           voterEmail: email,
-          rankings: rankings,
+          rankings: picks,
           resultsUrl: window.location.origin + window.location.pathname.replace('vote.html', 'results.html')
         });
 
@@ -188,6 +239,10 @@
         btn.textContent = 'Submit My Vote';
       }
     });
+
+    function escAttr(str) {
+      return (str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    }
 
     function escHtml(str) {
       if (!str) return '';
