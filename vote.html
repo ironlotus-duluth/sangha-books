@@ -101,23 +101,21 @@
 
     async function init() {
       try {
-        const round = await API.getRound(Session.getRound(), Session.getPassword());
+        // Single combined request: round info + books in one call
+        const data = await API.getRoundWithBooks(Session.getRound(), Session.getPassword());
+        const round = data.round;
+
         if (!round.votingOpen) {
           document.getElementById('closedMsg').classList.remove('hidden');
           return;
         }
 
-        const result = await API.getSuggestions();
-        if (result.error) {
-          showMsg('msg', result.error);
-          return;
-        }
-        if (!result.length) {
+        if (!data.books || !data.books.length) {
           showMsg('msg', 'No books have been submitted yet. Check back later.', 'info');
           return;
         }
 
-        books = result;
+        books = data.books;
         render();
         document.getElementById('voteSection').classList.remove('hidden');
       } catch (err) {
@@ -229,6 +227,7 @@
           return;
         }
 
+        DataCache.clear(); // Clear cache so results refresh
         document.getElementById('voteSection').classList.add('hidden');
         document.getElementById('explainer').classList.add('hidden');
         document.getElementById('successMsg').classList.remove('hidden');

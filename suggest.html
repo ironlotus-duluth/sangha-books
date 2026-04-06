@@ -62,8 +62,9 @@
 
     async function checkStatus() {
       try {
+        // Uses cached round data if available (from landing page visit)
         const round = await API.getRound(Session.getRound(), Session.getPassword());
-        if (!round.submissionsOpen) {
+        if (round && !round.submissionsOpen) {
           form.classList.add('hidden');
           document.getElementById('closedMsg').classList.remove('hidden');
         }
@@ -97,6 +98,7 @@
           submitBtn.textContent = 'Submit Suggestion';
           return;
         }
+        DataCache.clear(); // Clear cache so book list refreshes
         form.classList.add('hidden');
         document.getElementById('successMsg').classList.remove('hidden');
       } catch (err) {

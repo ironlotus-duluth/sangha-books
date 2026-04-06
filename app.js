@@ -10,25 +10,68 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbxIZoJacbIAYW9ZbA1e1L2Y
 // Replace with your Google OAuth Client ID (for admin pages only)
 const GOOGLE_CLIENT_ID = '899264795528-7kms1n19ftmfdgj41e4gnds45d2uls37.apps.googleusercontent.com';
 
-// ---------- SESSION (round password) ----------
+// ---------- SESSION (round password — persists across tabs/sessions) ----------
 
 const Session = {
   getRound() {
-    return sessionStorage.getItem('sb_round') || '';
+    return localStorage.getItem('sb_round') || '';
   },
   getPassword() {
-    return sessionStorage.getItem('sb_password') || '';
+    return localStorage.getItem('sb_password') || '';
   },
   set(round, password) {
-    sessionStorage.setItem('sb_round', round);
-    sessionStorage.setItem('sb_password', password);
+    localStorage.setItem('sb_round', round);
+    localStorage.setItem('sb_password', password);
   },
   clear() {
-    sessionStorage.removeItem('sb_round');
-    sessionStorage.removeItem('sb_password');
+    localStorage.removeItem('sb_round');
+    localStorage.removeItem('sb_password');
+    DataCache.clear();
   },
   isAuthenticated() {
     return !!(this.getRound() && this.getPassword());
+  }
+};
+
+// ---------- DATA CACHE (in-memory + localStorage, 60s TTL) ----------
+
+const DataCache = {
+  _mem: {},
+  TTL: 60000, // 60 seconds
+
+  get(key) {
+    // Try memory first
+    if (this._mem[key] && Date.now() - this._mem[key].ts < this.TTL) {
+      return this._mem[key].data;
+    }
+    // Try localStorage
+    try {
+      const raw = localStorage.getItem('sb_cache_' + key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Date.now() - parsed.ts < this.TTL) {
+          this._mem[key] = parsed;
+          return parsed.data;
+        }
+        localStorage.removeItem('sb_cache_' + key);
+      }
+    } catch (e) {}
+    return null;
+  },
+
+  set(key, data) {
+    const entry = { data, ts: Date.now() };
+    this._mem[key] = entry;
+    try { localStorage.setItem('sb_cache_' + key, JSON.stringify(entry)); } catch (e) {}
+  },
+
+  clear() {
+    this._mem = {};
+    try {
+      Object.keys(localStorage).forEach(k => {
+        if (k.startsWith('sb_cache_')) localStorage.removeItem(k);
+      });
+    } catch (e) {}
   }
 };
 
@@ -58,13 +101,59 @@ const API = {
   },
 
   async getRound(round, password) {
+    const cacheKey = 'round_' + (round || 'current');
+    const cached = DataCache.get(cacheKey);
+    if (cached) return cached;
+
     const params = new URLSearchParams({ action: 'getRound', round: round || '', password });
     const resp = await fetch(`${API_URL}?${params}`);
-    return resp.json();
+    const data = await resp.json();
+    if (!data.error) DataCache.set(cacheKey, data);
+    return data;
+  },
+
+  /**
+   * Combined endpoint: fetches round info + books in a single request.
+   * Falls back to two parallel calls if backend hasn't been updated yet.
+   */
+  async getRoundWithBooks(round, password) {
+    const cacheKey = 'roundWithBooks_' + (round || 'current');
+    const cached = DataCache.get(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const params = new URLSearchParams({
+        action: 'getRoundWithBooks',
+        round: round || '',
+        password
+      });
+      const resp = await fetch(`${API_URL}?${params}`);
+      const data = await resp.json();
+      if (!data.error && data.round) {
+        DataCache.set(cacheKey, data);
+        return data;
+      }
+      // If error or unexpected shape, fall back
+    } catch (e) {}
+
+    // Fallback: parallel calls
+    const [roundData, books] = await Promise.all([
+      this.getRound(round, password),
+      this.getSuggestions()
+    ]);
+    const combined = { round: roundData, books: Array.isArray(books) ? books : [] };
+    if (!roundData.error) DataCache.set(cacheKey, combined);
+    return combined;
   },
 
   async getSuggestions() {
-    return this.get('getSuggestions');
+    const cacheKey = 'suggestions';
+    const cached = DataCache.get(cacheKey);
+    if (cached) return cached;
+
+    const data = await this.get('getSuggestions');
+    if (Array.isArray(data)) DataCache.set(cacheKey, data);
+    return data;
   },
 
   async getVotes() {
@@ -72,9 +161,15 @@ const API = {
   },
 
   async getHistory() {
+    const cacheKey = 'history';
+    const cached = DataCache.get(cacheKey);
+    if (cached) return cached;
+
     const params = new URLSearchParams({ action: 'getHistory' });
     const resp = await fetch(`${API_URL}?${params}`);
-    return resp.json();
+    const data = await resp.json();
+    if (!data.error) DataCache.set(cacheKey, data);
+    return data;
   },
 
   async submitSuggestion(data) {

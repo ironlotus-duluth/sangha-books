@@ -14,7 +14,7 @@
     <h1>Iron Lotus Sangha</h1>
     <p>Enter the round password to get started.</p>
     <div id="gateMsg" class="msg msg-error hidden"></div>
-    <input type="password" id="gatePassword" placeholder="Round password" autofocus>
+    <input type="text" id="gatePassword" placeholder="Round password" autofocus>
     <br>
     <button class="btn btn-primary" id="gateBtn" style="width:100%; margin-top:0.5rem;">Enter</button>
     <p style="margin-top:2rem;">
@@ -153,8 +153,12 @@
       document.getElementById('roundTitle').textContent = Session.getRound();
 
       try {
-        const round = await API.getRound(Session.getRound(), Session.getPassword());
-        if (round.error) {
+        // Single combined request: round info + books in one call
+        const data = await API.getRoundWithBooks(Session.getRound(), Session.getPassword());
+        const round = data.round;
+        const books = data.books;
+
+        if (round.error || !round.name) {
           Session.clear();
           gate.classList.remove('hidden');
           landing.classList.add('hidden');
@@ -186,8 +190,7 @@
           voteCard.classList.add('card-disabled');
         }
 
-        // Get book count
-        const books = await API.getSuggestions();
+        // Book count from combined response
         if (Array.isArray(books)) {
           const badge = document.getElementById('bookCountBadge');
           badge.textContent = `${books.length} book${books.length !== 1 ? 's' : ''}`;

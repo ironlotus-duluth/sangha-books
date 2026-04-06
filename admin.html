@@ -159,6 +159,7 @@
         document.getElementById('adminPanel').classList.remove('hidden');
         renderHeader(document.getElementById('header'));
 
+        _cachedRounds = rounds; // Store for optimistic updates
         renderRounds(rounds);
 
         // Load books for active round review
@@ -360,6 +361,8 @@
       }).reverse().join(''); // Most recent first
     }
 
+    let _cachedRounds = []; // Local state for optimistic updates
+
     async function toggleSubmissions(roundName, open) {
       try {
         await API.adminPost({
@@ -368,7 +371,10 @@
           roundName,
           open
         });
-        loadAdmin();
+        // Optimistic update: re-render from local state instead of full reload
+        const r = _cachedRounds.find(r => r.name === roundName);
+        if (r) { r.submissionsOpen = open; renderRounds(_cachedRounds); }
+        else { loadAdmin(); }
       } catch (e) { showMsg('adminMsg', 'Failed to update.'); }
     }
 
@@ -380,7 +386,10 @@
           roundName,
           open
         });
-        loadAdmin();
+        // Optimistic update: re-render from local state instead of full reload
+        const r = _cachedRounds.find(r => r.name === roundName);
+        if (r) { r.votingOpen = open; renderRounds(_cachedRounds); }
+        else { loadAdmin(); }
       } catch (e) { showMsg('adminMsg', 'Failed to update.'); }
     }
 

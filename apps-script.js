@@ -128,6 +128,41 @@ function doGet(e) {
         break;
       }
 
+      case 'getRoundWithBooks': {
+        // Combined endpoint: returns round info + book suggestions in one call
+        const rwbRoundName = e.parameter.round;
+        const rwbPassword = e.parameter.password;
+        const rwbRound = rwbRoundName ? getRoundByName(rwbRoundName) : getCurrentRound();
+        if (!rwbRound) {
+          result = { error: 'No active round found.' };
+          break;
+        }
+        if (!rwbPassword || rwbRound['Password'] !== rwbPassword) {
+          result = { error: 'Invalid password.' };
+          break;
+        }
+        const rwbName = rwbRound['Round Name'];
+        const rwbSuggestions = sheetToObjects(getSheet('Suggestions'));
+        result = {
+          round: {
+            name: rwbName,
+            submissionsOpen: rwbRound['Submissions Open'] === true || rwbRound['Submissions Open'] === 'TRUE',
+            votingOpen: rwbRound['Voting Open'] === true || rwbRound['Voting Open'] === 'TRUE',
+            created: rwbRound['Created']
+          },
+          books: rwbSuggestions
+            .filter(s => s['Round'] === rwbName)
+            .map(s => ({
+              submitter: s['Submitter Name'],
+              title: s['Book Title'],
+              author: s['Author'],
+              link: s['Link'],
+              summary: s['Summary']
+            }))
+        };
+        break;
+      }
+
       case 'getSuggestions': {
         const roundName = e.parameter.round;
         const password = e.parameter.password;
@@ -166,6 +201,14 @@ function doGet(e) {
 
       case 'getHistory': {
         // History is public (no password needed — it's past rounds)
+        // Cache for 5 minutes since completed rounds rarely change
+        const cache = CacheService.getScriptCache();
+        const cachedHistory = cache.get('history');
+        if (cachedHistory) {
+          result = JSON.parse(cachedHistory);
+          break;
+        }
+
         const rounds = sheetToObjects(getSheet('Rounds'));
         const suggestions = sheetToObjects(getSheet('Suggestions'));
         const votes = sheetToObjects(getSheet('Votes'));
@@ -188,6 +231,9 @@ function doGet(e) {
             };
           })
           .reverse(); // Most recent first
+
+        // Cache for 5 minutes (300 seconds)
+        try { cache.put('history', JSON.stringify(result), 300); } catch (e) {}
         break;
       }
 
@@ -268,15 +314,20 @@ function doPost(e) {
         }
 
         // Check for duplicate voter (by email, if provided)
+        // Uses TextFinder for targeted search instead of reading entire sheet
         if (data.voterEmail) {
-          const existingVotes = sheetToObjects(getSheet('Votes'));
-          const dup = existingVotes.find(
-            v => v['Round'] === data.round && v['Voter Email'].toLowerCase() === data.voterEmail.toLowerCase()
-          );
-          if (dup) {
-            result = { error: 'You have already voted in this round. Each person may vote once.' };
-            break;
+          const votesSheet = getSheet('Votes');
+          const finder = votesSheet.createTextFinder(data.voterEmail.toLowerCase()).matchCase(false);
+          const matches = finder.findAll();
+          for (const cell of matches) {
+            const row = cell.getRow();
+            const rowRound = votesSheet.getRange(row, 2).getValue(); // Column B = Round
+            if (rowRound === data.round) {
+              result = { error: 'You have already voted in this round. Each person may vote once.' };
+              break;
+            }
           }
+          if (result) break;
         }
 
         getSheet('Votes').appendRow([
