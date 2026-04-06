@@ -5,7 +5,7 @@
 
 // ---------- CONFIGURATION ----------
 // Replace with your deployed Apps Script URL
-const API_URL = 'https://script.google.com/macros/s/AKfycbxIZoJacbIAYW9ZbA1e1L2YWjeGZIWu78nDyAjGisJNb82k8Lovqo4VNzKu0lPrzkZ0vQ/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbyYcJPBNIqmk4LhjYYi8LP-UbMt85t8SlPkhBnyas7snqSXxPo1tw9EuGL1bcWa8sSeDw/exec';
 
 // Replace with your Google OAuth Client ID (for admin pages only)
 const GOOGLE_CLIENT_ID = '899264795528-7kms1n19ftmfdgj41e4gnds45d2uls37.apps.googleusercontent.com';
