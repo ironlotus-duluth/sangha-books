@@ -166,8 +166,10 @@
         const ordinals = ['1st choice', '2nd choice', '3rd choice'];
         picksList.innerHTML = picks.map((title, i) => {
           const book = books.find(b => b.title === title) || {};
+          const detailId = 'detail-' + i;
+          const hasDetails = book.summary || book.link;
           return `
-            <li class="rank-item selected">
+            <li class="rank-item selected" style="flex-wrap:wrap;">
               <div class="rank-number">${i + 1}</div>
               <div class="rank-book-info">
                 <div class="rank-book-title">${escHtml(title)}</div>
@@ -177,7 +179,13 @@
                 <button onclick="movePick('${escAttr(title)}', -1)" title="Move up" ${i === 0 ? 'disabled' : ''}>&#9650;</button>
                 <button onclick="movePick('${escAttr(title)}', 1)" title="Move down" ${i === picks.length - 1 ? 'disabled' : ''}>&#9660;</button>
               </div>
+              ${hasDetails ? `<div style="font-size:0.85rem; color:#3b6e48; cursor:pointer; white-space:nowrap;" onclick="document.getElementById('${detailId}').classList.toggle('hidden')">details</div>` : ''}
               <div style="font-size:0.85rem; color:#b44; cursor:pointer; white-space:nowrap;" onclick="togglePick('${escAttr(title)}')">remove</div>
+              ${hasDetails ? `
+              <div id="${detailId}" class="hidden" style="width:100%; padding:0.75rem 0 0 calc(36px + 1rem); font-size:0.9rem;">
+                ${book.summary ? `<div style="color:#555; line-height:1.5; margin-bottom:0.4rem;">${escHtml(book.summary)}</div>` : ''}
+                ${book.link ? `<a href="${escHtml(book.link)}" target="_blank" rel="noopener" style="color:#3b6e48; font-size:0.85rem;">View on Goodreads</a>` : ''}
+              </div>` : ''}
             </li>
           `;
         }).join('');
