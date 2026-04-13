@@ -43,6 +43,11 @@
 
     <div id="adminMsg" class="msg msg-error hidden"></div>
 
+    <div id="adminLoader" style="text-align:center; padding:2rem 0;">
+      <span class="spinner"></span>
+      <span class="loading-text">Loading rounds…</span>
+    </div>
+
     <!-- How It Works Guide -->
     <details style="margin-bottom:2rem;">
       <summary style="cursor:pointer; font-size:1.1rem; font-weight:bold; color:#3b6e48; margin-bottom:0.75rem;">
@@ -142,6 +147,7 @@
     }
 
     async function loadAdmin() {
+      const loader = document.getElementById('adminLoader');
       try {
         const rounds = await API.adminGet('adminGetRounds', adminToken);
         if (rounds.error) {
@@ -157,6 +163,7 @@
 
         document.getElementById('signInGate').classList.add('hidden');
         document.getElementById('adminPanel').classList.remove('hidden');
+        loader.classList.add('hidden');
         renderHeader(document.getElementById('header'));
 
         _cachedRounds = rounds; // Store for optimistic updates
@@ -171,6 +178,7 @@
           document.getElementById('bookReviewSection').classList.add('hidden');
         }
       } catch (err) {
+        loader.classList.add('hidden');
         showMsg('gateMsg', 'Could not connect. Please try again.');
       }
     }

@@ -14,11 +14,16 @@
 
     <div id="msg" class="msg msg-error hidden"></div>
 
+    <div id="suggestLoader" style="text-align:center; padding:2rem 0;">
+      <span class="spinner"></span>
+      <span class="loading-text">Checking status…</span>
+    </div>
+
     <div id="closedMsg" class="msg msg-warning hidden">
       Submissions are closed for this round. Check back when a new round opens!
     </div>
 
-    <form id="form">
+    <form id="form" class="hidden">
       <label for="name" class="required">Your Name</label>
       <p class="hint">So we can follow up if we have questions.</p>
       <input type="text" id="name" required autocomplete="name" placeholder="e.g. Siddhartha Gautama">
@@ -61,14 +66,20 @@
     checkStatus();
 
     async function checkStatus() {
+      const loader = document.getElementById('suggestLoader');
       try {
         // Uses cached round data if available (from landing page visit)
         const round = await API.getRound(Session.getRound(), Session.getPassword());
+        loader.classList.add('hidden');
         if (round && !round.submissionsOpen) {
-          form.classList.add('hidden');
           document.getElementById('closedMsg').classList.remove('hidden');
+        } else {
+          form.classList.remove('hidden');
         }
-      } catch (e) {}
+      } catch (e) {
+        loader.classList.add('hidden');
+        form.classList.remove('hidden'); // Show form on error so page isn't blank
+      }
     }
 
     form.addEventListener('submit', async (e) => {

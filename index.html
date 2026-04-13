@@ -36,7 +36,12 @@
 
     <div id="landingMsg" class="msg msg-info hidden"></div>
 
-    <div class="landing-grid">
+    <div id="landingLoader" style="text-align:center; padding:2rem 0;">
+      <span class="spinner"></span>
+      <span class="loading-text">Loading round info…</span>
+    </div>
+
+    <div class="landing-grid hidden" id="landingGrid">
 
       <!-- Column 1: Participate -->
       <div class="landing-col">
@@ -151,10 +156,14 @@
       renderHeader(document.getElementById('header'));
 
       document.getElementById('roundTitle').textContent = Session.getRound();
+      const loader = document.getElementById('landingLoader');
+      const grid = document.getElementById('landingGrid');
 
       try {
         // Single combined request: round info + books in one call
         const data = await API.getRoundWithBooks(Session.getRound(), Session.getPassword());
+        loader.classList.add('hidden');
+        grid.classList.remove('hidden');
         const round = data.round;
         const books = data.books;
 
@@ -197,7 +206,9 @@
         }
 
       } catch (err) {
-        // Fail gracefully — landing page still works
+        // Fail gracefully — show the grid even if data failed to load
+        loader.classList.add('hidden');
+        grid.classList.remove('hidden');
       }
     }
   </script>
