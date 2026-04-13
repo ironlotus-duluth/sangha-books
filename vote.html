@@ -171,13 +171,13 @@
           return `
             <li class="rank-item selected" style="flex-wrap:wrap;">
               <div class="rank-number">${i + 1}</div>
-              <div class="rank-book-info">
-                <div class="rank-book-title">${escHtml(title)}</div>
-                <div class="rank-book-author">by ${escHtml(book.author || '')} — <em>${ordinals[i]}</em></div>
-              </div>
               <div class="rank-arrows">
                 <button onclick="movePick('${escAttr(title)}', -1)" title="Move up" ${i === 0 ? 'disabled' : ''}>&#9650;</button>
                 <button onclick="movePick('${escAttr(title)}', 1)" title="Move down" ${i === picks.length - 1 ? 'disabled' : ''}>&#9660;</button>
+              </div>
+              <div class="rank-book-info">
+                <div class="rank-book-title">${escHtml(title)}</div>
+                <div class="rank-book-author">by ${escHtml(book.author || '')} — <em>${ordinals[i]}</em></div>
               </div>
               ${hasDetails ? `<div style="font-size:0.85rem; color:#3b6e48; cursor:pointer; white-space:nowrap;" onclick="document.getElementById('${detailId}').classList.toggle('hidden')">details</div>` : ''}
               <div style="font-size:0.85rem; color:#b44; cursor:pointer; white-space:nowrap;" onclick="togglePick('${escAttr(title)}')">remove</div>
