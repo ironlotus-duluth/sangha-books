@@ -276,7 +276,7 @@ const RCV = {
   /**
    * Render RCV results into a container element.
    */
-  renderResults(container, result, books) {
+  renderResults(container, result, books, votingOpen) {
     if (!result.rounds.length) {
       container.innerHTML = '<p class="msg msg-info">No votes have been cast yet.</p>';
       return;
@@ -286,13 +286,17 @@ const RCV = {
 
     if (result.winner) {
       const winnerBook = books.find(b => b.title === result.winner) || { title: result.winner, author: '' };
+      const label = votingOpen ? 'Current Leader' : 'Winner';
+      const voterLabel = votingOpen
+        ? `${result.totalVoters} vote${result.totalVoters !== 1 ? 's' : ''} so far`
+        : `${result.totalVoters} voter${result.totalVoters !== 1 ? 's' : ''} participated`;
       html += `
         <div class="msg msg-success" style="text-align:center; margin-bottom:2rem;">
-          <h2 style="margin-bottom:0.25rem;">Winner</h2>
+          <h2 style="margin-bottom:0.25rem;">${label}</h2>
           <div style="font-size:1.3rem; font-weight:bold;">${winnerBook.title}</div>
           ${winnerBook.author ? `<div style="color:#555;">by ${winnerBook.author}</div>` : ''}
           <div style="margin-top:0.5rem; font-size:0.95rem; color:#666;">
-            ${result.totalVoters} voter${result.totalVoters !== 1 ? 's' : ''} participated
+            ${voterLabel}
           </div>
         </div>
       `;
@@ -304,7 +308,7 @@ const RCV = {
       html += `<div class="elimination-round">`;
       html += `<h3>Round ${i + 1}`;
       if (round.eliminated) html += ` <span style="font-weight:normal; color:#888;">— "${round.eliminated}" eliminated</span>`;
-      if (round.winner) html += ` <span style="font-weight:normal; color:#2c5e3a;">— Winner found</span>`;
+      if (round.winner) html += ` <span style="font-weight:normal; color:#2c5e3a;">— ${votingOpen ? 'Current leader' : 'Winner found'}</span>`;
       html += `</h3>`;
 
       const sorted = Object.entries(round.counts).sort((a, b) => b[1] - a[1]);

@@ -45,13 +45,16 @@
       document.getElementById('voterList').classList.add('hidden');
 
       try {
-        const [books, votes] = await Promise.all([
-          API.getSuggestions(),
+        const [roundData, votes] = await Promise.all([
+          API.getRoundWithBooks(Session.getRound(), Session.getPassword()),
           API.getVotes()
         ]);
 
-        if (books.error || votes.error) {
-          showMsg('msg', books.error || votes.error);
+        const books = roundData.books || [];
+        const votingOpen = roundData.round && roundData.round.votingOpen;
+
+        if (roundData.error || votes.error) {
+          showMsg('msg', roundData.error || votes.error);
           document.getElementById('results').innerHTML = '';
           return;
         }
@@ -64,7 +67,7 @@
 
         const candidates = books.map(b => b.title);
         const result = RCV.calculate(votes, candidates);
-        RCV.renderResults(document.getElementById('results'), result, books);
+        RCV.renderResults(document.getElementById('results'), result, books, votingOpen);
 
         // Show voter list
         const names = votes.map(v => v.voter).filter(Boolean);
