@@ -331,7 +331,7 @@ const RCV = {
       // Dense ranking: only bump rank when vote count drops
       if (i > 0 && count < standings[i - 1][1]) rank = i + 1;
       html += `
-        <div class="standing-row${isWinner ? ' standing-winner' : ''}">
+        <div class="standing-row${isWinner ? ' standing-winner' : ''}${count === 0 ? ' standing-zero' : ''}">
           <span class="standing-rank">${rank}</span>
           <span class="standing-info">
             <span class="standing-title">${book.title}</span>

@@ -326,16 +326,17 @@ input:focus, textarea:focus, select:focus {
   align-items: center;
   gap: 1rem;
   padding: 0.85rem 1rem;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #ddd;
 }
 
 .standing-row:last-child { border-bottom: none; }
 
 .standing-winner {
   background: #f5faf6;
-  border-radius: 8px;
-  border-bottom: none;
-  margin-bottom: 0.25rem;
+}
+
+.standing-zero {
+  opacity: 0.5;
 }
 
 .standing-rank {
