@@ -318,6 +318,12 @@ input:focus, textarea:focus, select:focus {
 }
 
 .results-standings-heading {
+  margin-bottom: 0.2rem;
+}
+
+.results-standings-note {
+  font-size: 0.9rem;
+  color: #888;
   margin-bottom: 1rem;
 }
 

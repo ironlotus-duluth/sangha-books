@@ -333,26 +333,20 @@ const RCV = {
 
     // --- Friendly Summary ---
 
-    // Get the final round's counts for the summary standings
-    const finalRound = result.rounds[result.rounds.length - 1];
-    // Build a full picture: collect all candidates with their best vote count
-    const allCandidates = {};
-    result.rounds.forEach(round => {
-      Object.entries(round.counts).forEach(([title, count]) => {
-        // Keep the highest count seen (from their last active round)
-        allCandidates[title] = count;
-      });
-    });
-    // But use final round counts as authoritative for survivors
-    Object.entries(finalRound.counts).forEach(([title, count]) => {
-      allCandidates[title] = count;
+    // Use Round 1 first-choice counts for all books — apples-to-apples comparison.
+    // Later-round redistribution is an RCV mechanic that belongs in Stats for Nerds.
+    const firstRound = result.rounds[0];
+    const allCandidates = { ...firstRound.counts };
+    // Include any books that were in the candidate list but got 0 votes in Round 1
+    books.forEach(b => {
+      if (!(b.title in allCandidates)) allCandidates[b.title] = 0;
     });
 
     if (result.winner) {
       const winnerBook = books.find(b => b.title === result.winner) || { title: result.winner, author: '' };
       const label = votingOpen ? 'Current Leader' : 'Our Next Read';
       const voterLabel = votingOpen
-        ? `${result.totalVoters} vote${result.totalVoters !== 1 ? 's' : ''} counted so far`
+        ? `${result.totalVoters} member${result.totalVoters !== 1 ? 's' : ''} have voted so far`
         : `${result.totalVoters} member${result.totalVoters !== 1 ? 's' : ''} voted`;
       html += `
         <div class="results-hero">
@@ -369,6 +363,7 @@ const RCV = {
     const standings = Object.entries(allCandidates).sort((a, b) => b[1] - a[1]);
     html += `<div class="results-standings">`;
     html += `<h2 class="results-standings-heading">${votingOpen ? 'Current Standings' : 'Final Standings'}</h2>`;
+    html += `<p class="results-standings-note">Based on first-choice votes</p>`;
     let rank = 1;
     standings.forEach(([title, count], i) => {
       const book = books.find(b => b.title === title) || { title, author: '' };
