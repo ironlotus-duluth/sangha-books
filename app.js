@@ -275,6 +275,7 @@ const RCV = {
 
   /**
    * Render RCV results into a container element.
+   * Two-tier layout: friendly summary up top, detailed rounds in collapsible section.
    */
   renderResults(container, result, books, votingOpen) {
     if (!result.rounds.length) {
@@ -284,42 +285,93 @@ const RCV = {
 
     let html = '';
 
+    // --- Friendly Summary ---
+
+    // Get the final round's counts for the summary standings
+    const finalRound = result.rounds[result.rounds.length - 1];
+    // Build a full picture: collect all candidates with their best vote count
+    const allCandidates = {};
+    result.rounds.forEach(round => {
+      Object.entries(round.counts).forEach(([title, count]) => {
+        // Keep the highest count seen (from their last active round)
+        allCandidates[title] = count;
+      });
+    });
+    // But use final round counts as authoritative for survivors
+    Object.entries(finalRound.counts).forEach(([title, count]) => {
+      allCandidates[title] = count;
+    });
+
     if (result.winner) {
       const winnerBook = books.find(b => b.title === result.winner) || { title: result.winner, author: '' };
-      const label = votingOpen ? 'Current Leader' : 'Winner';
+      const label = votingOpen ? 'Current Leader' : 'Our Next Read';
       const voterLabel = votingOpen
-        ? `${result.totalVoters} vote${result.totalVoters !== 1 ? 's' : ''} so far`
-        : `${result.totalVoters} voter${result.totalVoters !== 1 ? 's' : ''} participated`;
+        ? `${result.totalVoters} vote${result.totalVoters !== 1 ? 's' : ''} counted so far`
+        : `${result.totalVoters} member${result.totalVoters !== 1 ? 's' : ''} voted`;
       html += `
-        <div class="msg msg-success" style="text-align:center; margin-bottom:2rem;">
-          <h2 style="margin-bottom:0.25rem;">${label}</h2>
-          <div style="font-size:1.3rem; font-weight:bold;">${winnerBook.title}</div>
-          ${winnerBook.author ? `<div style="color:#555;">by ${winnerBook.author}</div>` : ''}
-          <div style="margin-top:0.5rem; font-size:0.95rem; color:#666;">
-            ${voterLabel}
-          </div>
+        <div class="results-hero">
+          <div class="results-hero-label">${label}</div>
+          <div class="results-hero-title">${winnerBook.title}</div>
+          ${winnerBook.author ? `<div class="results-hero-author">by ${winnerBook.author}</div>` : ''}
+          <div class="results-hero-meta">${voterLabel}</div>
         </div>
       `;
     }
 
-    // Show each elimination round
+    // Simple standings list — ranked by final vote count
+    const standings = Object.entries(allCandidates).sort((a, b) => b[1] - a[1]);
+    html += `<div class="results-standings">`;
+    html += `<h2 class="results-standings-heading">${votingOpen ? 'Current Standings' : 'Final Standings'}</h2>`;
+    standings.forEach(([title, count], i) => {
+      const book = books.find(b => b.title === title) || { title, author: '' };
+      const pct = result.totalVoters > 0 ? Math.round((count / result.totalVoters) * 100) : 0;
+      const isWinner = result.winner && result.winner === title;
+      const wasEliminated = result.rounds.some(r => r.eliminated === title);
+      html += `
+        <div class="standing-row${isWinner ? ' standing-winner' : ''}${wasEliminated ? ' standing-eliminated' : ''}">
+          <span class="standing-rank">${i + 1}</span>
+          <span class="standing-info">
+            <span class="standing-title">${book.title}</span>
+            ${book.author ? `<span class="standing-author">by ${book.author}</span>` : ''}
+          </span>
+          <span class="standing-votes">${count} vote${count !== 1 ? 's' : ''} <span class="standing-pct">(${pct}%)</span></span>
+        </div>
+      `;
+    });
+    html += `</div>`;
+
+    // --- Collapsible "Stats for Nerds" ---
+    html += `
+      <details class="nerd-stats">
+        <summary class="nerd-stats-toggle">Stats for Nerds</summary>
+        <div class="nerd-stats-body">
+          <p class="nerd-stats-intro">
+            Ranked-choice voting works by eliminating the book with the fewest first-choice votes each round,
+            then redistributing those votes to each voter's next pick, until one book has a majority.
+            ${result.rounds.length === 1
+              ? 'This time, a winner was found in the first round — no eliminations needed!'
+              : `It took ${result.rounds.length} round${result.rounds.length !== 1 ? 's' : ''} to find ${votingOpen ? 'the current leader' : 'a winner'}.`}
+          </p>
+    `;
+
+    // Compact round cards
     result.rounds.forEach((round, i) => {
-      const maxCount = Math.max(...Object.values(round.counts), 1);
-      html += `<div class="elimination-round">`;
-      html += `<h3>Round ${i + 1}`;
-      if (round.eliminated) html += ` <span style="font-weight:normal; color:#888;">— "${round.eliminated}" eliminated</span>`;
-      if (round.winner) html += ` <span style="font-weight:normal; color:#2c5e3a;">— ${votingOpen ? 'Current leader' : 'Winner found'}</span>`;
-      html += `</h3>`;
+      html += `<div class="nerd-round">`;
+      html += `<div class="nerd-round-header">`;
+      html += `<strong>Round ${i + 1}</strong>`;
+      if (round.eliminated) html += ` &mdash; <span class="nerd-eliminated">"${round.eliminated}" eliminated</span>`;
+      if (round.winner) html += ` &mdash; <span class="nerd-winner">${votingOpen ? 'Leader' : 'Winner'}: ${round.winner}</span>`;
+      html += `</div>`;
 
       const sorted = Object.entries(round.counts).sort((a, b) => b[1] - a[1]);
       sorted.forEach(([title, count]) => {
-        const pct = result.totalVoters > 0 ? ((count / result.totalVoters) * 100).toFixed(0) : 0;
+        const pct = result.totalVoters > 0 ? Math.round((count / result.totalVoters) * 100) : 0;
         let barClass = 'bar-fill';
         if (round.winner === title) barClass += ' winner';
         else if (round.eliminated === title) barClass += ' eliminated';
 
         html += `
-          <div class="bar-row">
+          <div class="bar-row compact">
             <div class="bar-label">${title}</div>
             <div class="bar-track"><div class="${barClass}" style="width:${pct}%"></div></div>
             <div class="bar-count">${count} (${pct}%)</div>
@@ -329,6 +381,8 @@ const RCV = {
 
       html += `</div>`;
     });
+
+    html += `</div></details>`;
 
     container.innerHTML = html;
   }
