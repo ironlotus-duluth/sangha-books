@@ -54,6 +54,15 @@
 
     <!-- Voting Form -->
     <div id="voteSection" class="hidden">
+      <div style="margin-bottom:1.5rem; padding-bottom:1.5rem; border-bottom:1px solid #ddd;">
+        <label for="voterName" class="required">Your Name</label>
+        <input type="text" id="voterName" placeholder="e.g. Siddhartha Gautama" autocomplete="name" style="margin-bottom:0.75rem;">
+
+        <label for="voterEmail">Email <span class="optional-tag">(optional)</span></label>
+        <p class="hint">If you provide your email, we'll send you a confirmation of your vote with a link to check the results.</p>
+        <input type="email" id="voterEmail" placeholder="e.g. siddhartha@bodhitree.org" autocomplete="email" style="margin-bottom:0;">
+      </div>
+
       <h2 style="margin-bottom:0.5rem;">Pick your top 3</h2>
       <p style="color:#666; margin-bottom:1rem; font-size:0.95rem;">
         Click on a book to select it. Your first click is your 1st choice, second click is your 2nd choice, and third click is your 3rd choice. Click a selected book again to remove it.
@@ -63,21 +72,11 @@
         <h3 style="margin-bottom:0.5rem;">Your picks:</h3>
         <ol id="picks" class="rank-list" style="margin-bottom:0.5rem;"></ol>
         <p style="font-size:0.9rem; color:#666;" id="pickHint">Choose <span id="remainingPicks">3</span> more.</p>
+        <button class="btn btn-primary hidden" id="submitVoteBtn" style="width:100%; margin-top:1rem;">Submit My Vote</button>
       </div>
 
       <h3 style="margin-bottom:0.75rem;" id="availableHeading">Available books:</h3>
       <div id="bookChoices"></div>
-
-      <div style="margin-top:2rem; padding-top:1.5rem; border-top:1px solid #ddd;">
-        <label for="voterName" class="required">Your Name</label>
-        <input type="text" id="voterName" placeholder="e.g. Siddhartha Gautama" autocomplete="name">
-
-        <label for="voterEmail">Email <span class="optional-tag">(optional)</span></label>
-        <p class="hint">If you provide your email, we'll send you a confirmation of your vote with a link to check the results.</p>
-        <input type="email" id="voterEmail" placeholder="e.g. siddhartha@bodhitree.org" autocomplete="email">
-
-        <button class="btn btn-primary" id="submitVoteBtn" style="width:100%;">Submit My Vote</button>
-      </div>
     </div>
 
     <!-- Success -->
@@ -190,11 +189,15 @@
           `;
         }).join('');
 
+        const submitBtn = document.getElementById('submitVoteBtn');
         if (remaining > 0) {
           hint.innerHTML = `Choose <strong>${remaining}</strong> more.`;
+          hint.style.color = '#666';
+          submitBtn.classList.add('hidden');
         } else {
-          hint.innerHTML = `All 3 picks made! Scroll down to submit.`;
+          hint.innerHTML = `All 3 picks made!`;
           hint.style.color = '#2c5e3a';
+          submitBtn.classList.remove('hidden');
         }
       } else {
         selectedSection.classList.add('hidden');
@@ -222,8 +225,6 @@
         `;
       }).join('');
 
-      // Enable/disable submit
-      document.getElementById('submitVoteBtn').disabled = picks.length === 0;
     }
 
     // Submit vote
