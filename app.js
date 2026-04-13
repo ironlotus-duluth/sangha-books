@@ -319,17 +319,20 @@ const RCV = {
     }
 
     // Simple standings list — ranked by final vote count
+    // Use dense ranking: equal votes get the same rank
     const standings = Object.entries(allCandidates).sort((a, b) => b[1] - a[1]);
     html += `<div class="results-standings">`;
     html += `<h2 class="results-standings-heading">${votingOpen ? 'Current Standings' : 'Final Standings'}</h2>`;
+    let rank = 1;
     standings.forEach(([title, count], i) => {
       const book = books.find(b => b.title === title) || { title, author: '' };
       const pct = result.totalVoters > 0 ? Math.round((count / result.totalVoters) * 100) : 0;
       const isWinner = result.winner && result.winner === title;
-      const wasEliminated = result.rounds.some(r => r.eliminated === title);
+      // Dense ranking: only bump rank when vote count drops
+      if (i > 0 && count < standings[i - 1][1]) rank = i + 1;
       html += `
-        <div class="standing-row${isWinner ? ' standing-winner' : ''}${wasEliminated ? ' standing-eliminated' : ''}">
-          <span class="standing-rank">${i + 1}</span>
+        <div class="standing-row${isWinner ? ' standing-winner' : ''}">
+          <span class="standing-rank">${rank}</span>
           <span class="standing-info">
             <span class="standing-title">${book.title}</span>
             ${book.author ? `<span class="standing-author">by ${book.author}</span>` : ''}
@@ -348,14 +351,27 @@ const RCV = {
           <p class="nerd-stats-intro">
             Ranked-choice voting works by eliminating the book with the fewest first-choice votes each round,
             then redistributing those votes to each voter's next pick, until one book has a majority.
-            ${result.rounds.length === 1
-              ? 'This time, a winner was found in the first round — no eliminations needed!'
-              : `It took ${result.rounds.length} round${result.rounds.length !== 1 ? 's' : ''} to find ${votingOpen ? 'the current leader' : 'a winner'}.`}
           </p>
     `;
 
-    // Compact round cards
+    // Separate trivial rounds (0-vote eliminations) from meaningful ones
+    const trivialEliminated = [];
+    const meaningfulRounds = [];
     result.rounds.forEach((round, i) => {
+      if (round.eliminated && round.counts[round.eliminated] === 0 && !round.winner) {
+        trivialEliminated.push(round.eliminated);
+      } else {
+        meaningfulRounds.push({ round, originalIndex: i });
+      }
+    });
+
+    // Summarize trivial eliminations in one line
+    if (trivialEliminated.length) {
+      html += `<p class="nerd-trivial">Books with no first-choice votes were removed: ${trivialEliminated.map(t => `"${t}"`).join(', ')}</p>`;
+    }
+
+    // Show only the meaningful rounds with compact cards
+    meaningfulRounds.forEach(({ round }, i) => {
       html += `<div class="nerd-round">`;
       html += `<div class="nerd-round-header">`;
       html += `<strong>Round ${i + 1}</strong>`;

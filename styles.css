@@ -338,10 +338,6 @@ input:focus, textarea:focus, select:focus {
   margin-bottom: 0.25rem;
 }
 
-.standing-eliminated {
-  opacity: 0.55;
-}
-
 .standing-rank {
   flex: 0 0 2rem;
   width: 2rem;
@@ -354,10 +350,6 @@ input:focus, textarea:focus, select:focus {
   justify-content: center;
   font-size: 0.95rem;
   font-weight: bold;
-}
-
-.standing-eliminated .standing-rank {
-  background: #bbb;
 }
 
 .standing-info {
@@ -450,6 +442,13 @@ input:focus, textarea:focus, select:focus {
   font-size: 0.9rem;
   margin-bottom: 0.5rem;
   color: #333;
+}
+
+.nerd-trivial {
+  font-size: 0.85rem;
+  color: #888;
+  font-style: italic;
+  margin-bottom: 0.75rem;
 }
 
 .nerd-eliminated { color: #999; }
