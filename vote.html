@@ -72,6 +72,9 @@
         <h3 style="margin-bottom:0.5rem;">Your picks:</h3>
         <ol id="picks" class="rank-list" style="margin-bottom:0.5rem;"></ol>
         <p style="font-size:0.9rem; color:#666;" id="pickHint">Choose <span id="remainingPicks">3</span> more.</p>
+        <p id="partialHint" class="hidden" style="font-size:0.85rem; margin-top:0.25rem;">
+          <a href="#" id="partialSubmitLink" style="color:#3b6e48;" onclick="event.preventDefault(); document.getElementById('submitVoteBtn').classList.remove('hidden'); this.parentElement.classList.add('hidden');">Only want to pick <span id="partialCount">1</span>? Submit as-is &rarr;</a>
+        </p>
         <button class="btn btn-primary hidden" id="submitVoteBtn" style="width:100%; margin-top:1rem;">Submit My Vote</button>
       </div>
 
@@ -190,14 +193,19 @@
         }).join('');
 
         const submitBtn = document.getElementById('submitVoteBtn');
+        const partialHint = document.getElementById('partialHint');
+        const partialCount = document.getElementById('partialCount');
         if (remaining > 0) {
           hint.innerHTML = `Choose <strong>${remaining}</strong> more.`;
           hint.style.color = '#666';
           submitBtn.classList.add('hidden');
+          partialCount.textContent = picks.length === 1 ? '1' : '2';
+          partialHint.classList.remove('hidden');
         } else {
           hint.innerHTML = `All 3 picks made!`;
           hint.style.color = '#2c5e3a';
           submitBtn.classList.remove('hidden');
+          partialHint.classList.add('hidden');
         }
       } else {
         selectedSection.classList.add('hidden');
