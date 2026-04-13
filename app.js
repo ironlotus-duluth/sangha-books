@@ -201,21 +201,24 @@ const API = {
 
 const RCV = {
   /**
-   * Tiebreaker: when candidates are tied on first-choice votes, the one with
-   * the least total support across ALL ballot positions (1st + 2nd + 3rd) is
-   * eliminated first. If still tied, falls back to alphabetical order.
+   * Tiebreaker: weighted support score (Borda-style).
+   * 1st-place mention = 3 pts, 2nd = 2 pts, 3rd = 1 pt.
+   * The candidate with the lowest weighted score is eliminated.
+   * If still tied, falls back to alphabetical order.
+   * Returns: { eliminated, scores }
    */
   _leastSupported(tied, ballots) {
-    // Count how many ballots mention each candidate in any position
-    const support = {};
-    tied.forEach(c => support[c] = 0);
+    const scores = {};
+    tied.forEach(c => scores[c] = 0);
     ballots.forEach(ballot => {
-      tied.forEach(c => { if (ballot.includes(c)) support[c]++; });
+      tied.forEach(c => {
+        const pos = ballot.indexOf(c);
+        if (pos !== -1) scores[c] += (3 - pos); // 1st=3, 2nd=2, 3rd=1
+      });
     });
-    const minSupport = Math.min(...tied.map(c => support[c]));
-    const weakest = tied.filter(c => support[c] === minSupport);
-    // If still tied, alphabetical as last resort
-    return weakest.sort()[weakest.length - 1];
+    const minScore = Math.min(...tied.map(c => scores[c]));
+    const weakest = tied.filter(c => scores[c] === minScore);
+    return { eliminated: weakest.sort()[weakest.length - 1], scores };
   },
 
   /**
@@ -266,20 +269,18 @@ const RCV = {
           rounds.push(roundInfo);
           return { winner: sorted[0], rounds, totalVoters };
         }
-        // Tied on first-choice: pick the one with more total ballot mentions
-        const support = {};
-        remaining.forEach(c => support[c] = 0);
-        ballots.forEach(ballot => {
-          remaining.forEach(c => { if (ballot.includes(c)) support[c]++; });
-        });
-        if (support[sorted[0]] !== support[sorted[1]]) {
-          const winner = support[sorted[0]] >= support[sorted[1]] ? sorted[0] : sorted[1];
+        // Tied on first-choice: use weighted support to break it
+        const { eliminated: loser, scores } = this._leastSupported(remaining, ballots);
+        if (scores[sorted[0]] !== scores[sorted[1]]) {
+          const winner = loser === sorted[0] ? sorted[1] : sorted[0];
           roundInfo.winner = winner;
+          roundInfo.tiebreaker = { tied: [...remaining], scores };
           rounds.push(roundInfo);
           return { winner, rounds, totalVoters };
         }
-        // True tie — identical first-choice AND total support
+        // True tie — identical first-choice AND weighted support
         roundInfo.winner = sorted[0] + ' (tie)';
+        roundInfo.tiebreaker = { tied: [...remaining], scores };
         rounds.push(roundInfo);
         return { winner: sorted[0] + ' (tie)', rounds, totalVoters };
       }
@@ -287,21 +288,17 @@ const RCV = {
       // Eliminate the candidate with fewest first-choice votes
       const min = Math.min(...Object.values(counts));
       const toEliminate = remaining.filter(c => counts[c] === min);
-      // Break ties by total ballot support (least mentioned = eliminated first)
+      // Break ties by weighted support (lowest score = eliminated first)
       const tiedAtBottom = toEliminate.length > 1;
-      const eliminated = tiedAtBottom
-        ? this._leastSupported(toEliminate, ballots)
-        : toEliminate[0];
-      roundInfo.eliminated = eliminated;
+      let eliminated;
       if (tiedAtBottom) {
-        // Attach tiebreaker context so the UI can explain the decision
-        const support = {};
-        toEliminate.forEach(c => support[c] = 0);
-        ballots.forEach(ballot => {
-          toEliminate.forEach(c => { if (ballot.includes(c)) support[c]++; });
-        });
-        roundInfo.tiebreaker = { tied: toEliminate, support };
+        const result = this._leastSupported(toEliminate, ballots);
+        eliminated = result.eliminated;
+        roundInfo.tiebreaker = { tied: toEliminate, scores: result.scores };
+      } else {
+        eliminated = toEliminate[0];
       }
+      roundInfo.eliminated = eliminated;
       rounds.push(roundInfo);
 
       remaining = remaining.filter(c => c !== eliminated);
@@ -424,12 +421,11 @@ const RCV = {
       // Explain tiebreaker when it was used
       if (round.tiebreaker) {
         const tb = round.tiebreaker;
-        const details = tb.tied.map(c => `${c}: ${tb.support[c]}`).sort((a, b) => {
-          const countA = parseInt(a.split(': ')[1]);
-          const countB = parseInt(b.split(': ')[1]);
-          return countB - countA;
-        }).join(', ');
-        html += `<div class="nerd-tiebreaker">Tiebreaker — total mentions across all ballots: ${details}</div>`;
+        const details = tb.tied
+          .sort((a, b) => tb.scores[b] - tb.scores[a])
+          .map(c => `${c}: ${tb.scores[c]} pts`)
+          .join(', ');
+        html += `<div class="nerd-tiebreaker">Tiebreaker — weighted support (1st=3, 2nd=2, 3rd=1): ${details}</div>`;
       }
 
       const sorted = Object.entries(round.counts).sort((a, b) => b[1] - a[1]);
