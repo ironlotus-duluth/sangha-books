@@ -451,6 +451,14 @@ input:focus, textarea:focus, select:focus {
   margin-bottom: 0.75rem;
 }
 
+.nerd-trivial-list {
+  font-size: 0.8rem;
+  color: #aaa;
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #eee;
+}
+
 .nerd-eliminated { color: #999; }
 .nerd-winner { color: #2c5e3a; font-weight: bold; }
 

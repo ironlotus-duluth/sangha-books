@@ -365,9 +365,9 @@ const RCV = {
       }
     });
 
-    // Summarize trivial eliminations in one line
+    // Note about trivial eliminations (title list comes after the round cards)
     if (trivialEliminated.length) {
-      html += `<p class="nerd-trivial">Books with no first-choice votes were removed: ${trivialEliminated.map(t => `"${t}"`).join(', ')}</p>`;
+      html += `<p class="nerd-trivial">Books with no first-choice votes were removed before counting began.</p>`;
     }
 
     // Show only the meaningful rounds with compact cards
@@ -397,6 +397,11 @@ const RCV = {
 
       html += `</div>`;
     });
+
+    // List the 0-vote titles at the bottom, low-key
+    if (trivialEliminated.length) {
+      html += `<p class="nerd-trivial-list">Removed: ${trivialEliminated.join(', ')}</p>`;
+    }
 
     html += `</div></details>`;
 
