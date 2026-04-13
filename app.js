@@ -201,6 +201,24 @@ const API = {
 
 const RCV = {
   /**
+   * Tiebreaker: when candidates are tied on first-choice votes, the one with
+   * the least total support across ALL ballot positions (1st + 2nd + 3rd) is
+   * eliminated first. If still tied, falls back to alphabetical order.
+   */
+  _leastSupported(tied, ballots) {
+    // Count how many ballots mention each candidate in any position
+    const support = {};
+    tied.forEach(c => support[c] = 0);
+    ballots.forEach(ballot => {
+      tied.forEach(c => { if (ballot.includes(c)) support[c]++; });
+    });
+    const minSupport = Math.min(...tied.map(c => support[c]));
+    const weakest = tied.filter(c => support[c] === minSupport);
+    // If still tied, alphabetical as last resort
+    return weakest.sort()[weakest.length - 1];
+  },
+
+  /**
    * Run a full RCV election.
    * @param {Array} votes - Array of { voter, rankings: ["Title1", "Title2", ...] }
    * @param {Array} candidates - Array of book title strings
@@ -240,7 +258,7 @@ const RCV = {
         return { winner, rounds, totalVoters };
       }
 
-      // If only two left, higher count wins (or tie)
+      // If only two left, higher count wins — break ties by total support
       if (remaining.length === 2) {
         const sorted = remaining.sort((a, b) => counts[b] - counts[a]);
         if (counts[sorted[0]] > counts[sorted[1]]) {
@@ -248,7 +266,19 @@ const RCV = {
           rounds.push(roundInfo);
           return { winner: sorted[0], rounds, totalVoters };
         }
-        // True tie
+        // Tied on first-choice: pick the one with more total ballot mentions
+        const support = {};
+        remaining.forEach(c => support[c] = 0);
+        ballots.forEach(ballot => {
+          remaining.forEach(c => { if (ballot.includes(c)) support[c]++; });
+        });
+        if (support[sorted[0]] !== support[sorted[1]]) {
+          const winner = support[sorted[0]] >= support[sorted[1]] ? sorted[0] : sorted[1];
+          roundInfo.winner = winner;
+          rounds.push(roundInfo);
+          return { winner, rounds, totalVoters };
+        }
+        // True tie — identical first-choice AND total support
         roundInfo.winner = sorted[0] + ' (tie)';
         rounds.push(roundInfo);
         return { winner: sorted[0] + ' (tie)', rounds, totalVoters };
@@ -257,9 +287,21 @@ const RCV = {
       // Eliminate the candidate with fewest first-choice votes
       const min = Math.min(...Object.values(counts));
       const toEliminate = remaining.filter(c => counts[c] === min);
-      // If tie at bottom, eliminate all tied (standard RCV)
-      const eliminated = toEliminate[toEliminate.length - 1]; // Pick last alphabetically for consistency
+      // Break ties by total ballot support (least mentioned = eliminated first)
+      const tiedAtBottom = toEliminate.length > 1;
+      const eliminated = tiedAtBottom
+        ? this._leastSupported(toEliminate, ballots)
+        : toEliminate[0];
       roundInfo.eliminated = eliminated;
+      if (tiedAtBottom) {
+        // Attach tiebreaker context so the UI can explain the decision
+        const support = {};
+        toEliminate.forEach(c => support[c] = 0);
+        ballots.forEach(ballot => {
+          toEliminate.forEach(c => { if (ballot.includes(c)) support[c]++; });
+        });
+        roundInfo.tiebreaker = { tied: toEliminate, support };
+      }
       rounds.push(roundInfo);
 
       remaining = remaining.filter(c => c !== eliminated);
@@ -378,6 +420,17 @@ const RCV = {
       if (round.eliminated) html += ` &mdash; <span class="nerd-eliminated">"${round.eliminated}" eliminated</span>`;
       if (round.winner) html += ` &mdash; <span class="nerd-winner">${votingOpen ? 'Leader' : 'Winner'}: ${round.winner}</span>`;
       html += `</div>`;
+
+      // Explain tiebreaker when it was used
+      if (round.tiebreaker) {
+        const tb = round.tiebreaker;
+        const details = tb.tied.map(c => `${c}: ${tb.support[c]}`).sort((a, b) => {
+          const countA = parseInt(a.split(': ')[1]);
+          const countB = parseInt(b.split(': ')[1]);
+          return countB - countA;
+        }).join(', ');
+        html += `<div class="nerd-tiebreaker">Tiebreaker — total mentions across all ballots: ${details}</div>`;
+      }
 
       const sorted = Object.entries(round.counts).sort((a, b) => b[1] - a[1]);
       sorted.forEach(([title, count]) => {

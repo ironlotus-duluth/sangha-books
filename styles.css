@@ -460,6 +460,13 @@ input:focus, textarea:focus, select:focus {
   border-top: 1px solid #eee;
 }
 
+.nerd-tiebreaker {
+  font-size: 0.8rem;
+  color: #888;
+  font-style: italic;
+  margin-bottom: 0.4rem;
+}
+
 .nerd-eliminated { color: #999; }
 .nerd-winner { color: #2c5e3a; font-weight: bold; }
 
