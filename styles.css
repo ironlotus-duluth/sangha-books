@@ -272,7 +272,7 @@ input:focus, textarea:focus, select:focus {
 .gate-wrap p { margin-bottom: 1.5rem; color: #555; }
 .gate-wrap input { text-align: center; }
 
-/* -- Results / RCV -- */
+/* -- Results / Borda Count -- */
 
 /* Hero: winner / current leader */
 .results-hero {
@@ -516,6 +516,8 @@ input:focus, textarea:focus, select:focus {
 }
 
 .tb-row.tb-eliminated { opacity: 0.5; }
+.tb-row.tb-winner .tb-label { font-weight: bold; color: #2c5e3a; }
+.tb-row.tb-zero { opacity: 0.4; }
 
 .tb-label {
   flex: 0 0 140px;
@@ -564,6 +566,22 @@ input:focus, textarea:focus, select:focus {
 
 .nerd-eliminated { color: #999; }
 .nerd-winner { color: #2c5e3a; font-weight: bold; }
+
+.nerd-tiebreaker-note {
+  font-size: 0.85rem;
+  color: #888;
+  font-style: italic;
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #eee;
+}
+
+/* Borda chart promoted to main view — slightly larger than tiebreaker version */
+.borda-chart {
+  margin-top: 0.25rem;
+}
+.borda-chart .tb-label { font-size: 0.85rem; }
+.borda-chart .tb-score { font-size: 0.8rem; }
 
 /* Bar charts (shared between summary and nerd stats) */
 .bar-row {

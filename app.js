@@ -1,6 +1,6 @@
 // ============================================================
 // SANGHA BOOK GROUP — Shared JavaScript
-// API client, auth, ranked choice voting, utilities
+// API client, auth, Borda count voting, utilities
 // ============================================================
 
 // ---------- CONFIGURATION ----------
@@ -197,153 +197,84 @@ const API = {
   }
 };
 
-// ---------- RANKED CHOICE VOTING ----------
+// ---------- BORDA COUNT VOTING ----------
+// Each voter ranks their top 3 books. Points: 1st = 3, 2nd = 2, 3rd = 1.
+// All rankings are counted in a single pass — no elimination rounds.
+// The book with the most total points wins.
+
+const BORDA_POINTS = [3, 2, 1]; // Index 0 = 1st choice, 1 = 2nd, 2 = 3rd
 
 const RCV = {
   /**
-   * Tiebreaker: weighted support score (Borda-style).
-   * 1st-place mention = 3 pts, 2nd = 2 pts, 3rd = 1 pt.
-   * The candidate with the lowest weighted score is eliminated.
-   * If still tied, falls back to alphabetical order.
-   * Returns: { eliminated, scores, positions }
-   *   positions: { title: { first: n, second: n, third: n } }
-   */
-  _leastSupported(tied, ballots) {
-    const scores = {};
-    const positions = {};
-    tied.forEach(c => {
-      scores[c] = 0;
-      positions[c] = { first: 0, second: 0, third: 0 };
-    });
-    ballots.forEach(ballot => {
-      tied.forEach(c => {
-        const pos = ballot.indexOf(c);
-        if (pos === 0) { positions[c].first++; scores[c] += 3; }
-        else if (pos === 1) { positions[c].second++; scores[c] += 2; }
-        else if (pos === 2) { positions[c].third++; scores[c] += 1; }
-      });
-    });
-    const minScore = Math.min(...tied.map(c => scores[c]));
-    const weakest = tied.filter(c => scores[c] === minScore);
-    return { eliminated: weakest.sort()[weakest.length - 1], scores, positions };
-  },
-
-  /**
-   * Run a full RCV election.
-   * @param {Array} votes - Array of { voter, rankings: ["Title1", "Title2", ...] }
+   * Run a Borda count election.
+   * @param {Array} votes  - Array of { voter, rankings: ["Title1", "Title2", ...] }
    * @param {Array} candidates - Array of book title strings
-   * @returns {Object} { winner, rounds, totalVoters }
-   *   rounds: [{ counts: { title: count }, eliminated: "title"|null, winner: "title"|null }]
+   * @returns {Object} { winner, standings, totalVoters, tiebroken }
+   *   standings: [{ title, score, positions: { first, second, third } }]
    */
   calculate(votes, candidates) {
     if (!votes.length || !candidates.length) {
-      return { winner: null, rounds: [], totalVoters: 0 };
+      return { winner: null, standings: [], totalVoters: 0, tiebroken: false };
     }
 
     const totalVoters = votes.length;
-    const threshold = Math.floor(totalVoters / 2) + 1;
-    let remaining = [...candidates];
-    let ballots = votes.map(v => [...v.rankings]); // Deep copy
-    const rounds = [];
 
-    while (remaining.length > 1) {
-      // Count first-choice votes among remaining candidates
-      const counts = {};
-      remaining.forEach(c => counts[c] = 0);
+    // Initialize scores and position counts for every candidate
+    const scores = {};
+    const positions = {};
+    candidates.forEach(c => {
+      scores[c] = 0;
+      positions[c] = { first: 0, second: 0, third: 0 };
+    });
 
-      ballots.forEach(ballot => {
-        // Find first remaining candidate on this ballot
-        const pick = ballot.find(b => remaining.includes(b));
-        if (pick) counts[pick]++;
+    // Score each ballot
+    const posLabels = ['first', 'second', 'third'];
+    votes.forEach(v => {
+      v.rankings.forEach((title, i) => {
+        if (i < BORDA_POINTS.length && scores.hasOwnProperty(title)) {
+          scores[title] += BORDA_POINTS[i];
+          positions[title][posLabels[i]]++;
+        }
       });
+    });
 
-      // Check for winner
-      const max = Math.max(...Object.values(counts));
-      const roundInfo = { counts: { ...counts }, eliminated: null, winner: null };
+    // Build standings sorted by score, then first-choice, then second-choice, then alpha
+    const standings = candidates.map(title => ({
+      title,
+      score: scores[title],
+      positions: { ...positions[title] }
+    })).sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      if (b.positions.first !== a.positions.first) return b.positions.first - a.positions.first;
+      if (b.positions.second !== a.positions.second) return b.positions.second - a.positions.second;
+      return a.title.localeCompare(b.title);
+    });
 
-      if (max >= threshold) {
-        const winner = remaining.find(c => counts[c] === max);
-        roundInfo.winner = winner;
-        rounds.push(roundInfo);
-        return { winner, rounds, totalVoters };
-      }
+    // Detect if tiebreaker was needed (top 2 have same score)
+    const tiebroken = standings.length > 1 && standings[0].score === standings[1].score;
+    const winner = standings[0].title;
 
-      // If only two left, higher count wins — break ties by total support
-      if (remaining.length === 2) {
-        const sorted = remaining.sort((a, b) => counts[b] - counts[a]);
-        if (counts[sorted[0]] > counts[sorted[1]]) {
-          roundInfo.winner = sorted[0];
-          rounds.push(roundInfo);
-          return { winner: sorted[0], rounds, totalVoters };
-        }
-        // Tied on first-choice: use weighted support to break it
-        const { eliminated: loser, scores, positions } = this._leastSupported(remaining, ballots);
-        if (scores[sorted[0]] !== scores[sorted[1]]) {
-          const winner = loser === sorted[0] ? sorted[1] : sorted[0];
-          roundInfo.winner = winner;
-          roundInfo.tiebreaker = { tied: [...remaining], scores, positions };
-          rounds.push(roundInfo);
-          return { winner, rounds, totalVoters };
-        }
-        // True tie — identical first-choice AND weighted support
-        roundInfo.winner = sorted[0] + ' (tie)';
-        roundInfo.tiebreaker = { tied: [...remaining], scores, positions };
-        rounds.push(roundInfo);
-        return { winner: sorted[0] + ' (tie)', rounds, totalVoters };
-      }
-
-      // Eliminate the candidate with fewest first-choice votes
-      const min = Math.min(...Object.values(counts));
-      const toEliminate = remaining.filter(c => counts[c] === min);
-      // Break ties by weighted support (lowest score = eliminated first)
-      const tiedAtBottom = toEliminate.length > 1;
-      let eliminated;
-      if (tiedAtBottom) {
-        const tbResult = this._leastSupported(toEliminate, ballots);
-        eliminated = tbResult.eliminated;
-        roundInfo.tiebreaker = { tied: toEliminate, scores: tbResult.scores, positions: tbResult.positions };
-      } else {
-        eliminated = toEliminate[0];
-      }
-      roundInfo.eliminated = eliminated;
-      rounds.push(roundInfo);
-
-      remaining = remaining.filter(c => c !== eliminated);
-    }
-
-    // One left standing
-    const lastCounts = {};
-    lastCounts[remaining[0]] = ballots.filter(b => b.some(c => remaining.includes(c))).length;
-    rounds.push({ counts: lastCounts, eliminated: null, winner: remaining[0] });
-
-    return { winner: remaining[0], rounds, totalVoters };
+    return { winner, standings, totalVoters, tiebroken };
   },
 
   /**
-   * Render RCV results into a container element.
-   * Two-tier layout: friendly summary up top, detailed rounds in collapsible section.
+   * Render Borda count results into a container element.
+   * Two-tier layout: friendly summary up top, detailed breakdown in collapsible section.
    */
   renderResults(container, result, books, votingOpen) {
-    if (!result.rounds.length) {
+    if (!result.standings || !result.standings.length) {
       container.innerHTML = '<p class="msg msg-info">No votes have been cast yet.</p>';
       return;
     }
 
     let html = '';
+    const maxPoints = BORDA_POINTS[0] * result.totalVoters; // theoretical max
 
     // --- Friendly Summary ---
 
-    // Use Round 1 first-choice counts for all books — apples-to-apples comparison.
-    // Later-round redistribution is an RCV mechanic that belongs in Stats for Nerds.
-    const firstRound = result.rounds[0];
-    const allCandidates = { ...firstRound.counts };
-    // Include any books that were in the candidate list but got 0 votes in Round 1
-    books.forEach(b => {
-      if (!(b.title in allCandidates)) allCandidates[b.title] = 0;
-    });
-
     if (result.winner) {
       const winnerBook = books.find(b => b.title === result.winner) || { title: result.winner, author: '' };
+      const winnerStanding = result.standings[0];
       const label = votingOpen ? 'Current Leader' : 'Our Next Read';
       const voterLabel = votingOpen
         ? `${result.totalVoters} member${result.totalVoters !== 1 ? 's' : ''} have voted so far`
@@ -353,32 +284,29 @@ const RCV = {
           <div class="results-hero-label">${label}</div>
           <div class="results-hero-title">${winnerBook.title}</div>
           ${winnerBook.author ? `<div class="results-hero-author">by ${winnerBook.author}</div>` : ''}
-          <div class="results-hero-meta">${voterLabel}</div>
+          <div class="results-hero-meta">${winnerStanding.score} point${winnerStanding.score !== 1 ? 's' : ''} · ${voterLabel}</div>
         </div>
       `;
     }
 
-    // Simple standings list — ranked by final vote count
-    // Use dense ranking: equal votes get the same rank
-    const standings = Object.entries(allCandidates).sort((a, b) => b[1] - a[1]);
+    // Standings list — ranked by Borda score, dense ranking
     html += `<div class="results-standings">`;
     html += `<h2 class="results-standings-heading">${votingOpen ? 'Current Standings' : 'Final Standings'}</h2>`;
-    html += `<p class="results-standings-note">Based on first-choice votes</p>`;
+    html += `<p class="results-standings-note">Ranked by total points (1st pick = 3 pts, 2nd = 2 pts, 3rd = 1 pt)</p>`;
     let rank = 1;
-    standings.forEach(([title, count], i) => {
-      const book = books.find(b => b.title === title) || { title, author: '' };
-      const pct = result.totalVoters > 0 ? Math.round((count / result.totalVoters) * 100) : 0;
-      const isWinner = result.winner && result.winner === title;
-      // Dense ranking: only bump rank when vote count drops
-      if (i > 0 && count < standings[i - 1][1]) rank = i + 1;
+    result.standings.forEach((s, i) => {
+      const book = books.find(b => b.title === s.title) || { title: s.title, author: '' };
+      const isWinner = result.winner && result.winner === s.title;
+      // Dense ranking: only bump rank when score drops
+      if (i > 0 && s.score < result.standings[i - 1].score) rank = i + 1;
       html += `
-        <div class="standing-row${isWinner ? ' standing-winner' : ''}${count === 0 ? ' standing-zero' : ''}">
+        <div class="standing-row${isWinner ? ' standing-winner' : ''}${s.score === 0 ? ' standing-zero' : ''}">
           <span class="standing-rank">${rank}</span>
           <span class="standing-info">
             <span class="standing-title">${book.title}</span>
             ${book.author ? `<span class="standing-author">by ${book.author}</span>` : ''}
           </span>
-          <span class="standing-votes">${count} vote${count !== 1 ? 's' : ''} <span class="standing-pct">(${pct}%)</span></span>
+          <span class="standing-votes">${s.score} pt${s.score !== 1 ? 's' : ''}</span>
         </div>
       `;
     });
@@ -390,97 +318,65 @@ const RCV = {
         <summary class="nerd-stats-toggle">Stats for Nerds</summary>
         <div class="nerd-stats-body">
           <p class="nerd-stats-intro">
-            Ranked-choice voting works by eliminating the book with the fewest first-choice votes each round,
-            then redistributing those votes to each voter's next pick, until one book has a majority.
+            This uses a Borda count: your 1st choice earns 3 points, 2nd earns 2, and 3rd earns 1.
+            All rankings are tallied in a single pass — no elimination rounds. The book with the
+            most total points wins. This method finds the book with the broadest support across
+            all voters, not just the one with the most first-choice votes.
           </p>
     `;
 
-    // Separate trivial rounds (0-vote eliminations) from meaningful ones
-    const trivialEliminated = [];
-    const meaningfulRounds = [];
-    result.rounds.forEach((round, i) => {
-      if (round.eliminated && round.counts[round.eliminated] === 0 && !round.winner) {
-        trivialEliminated.push(round.eliminated);
-      } else {
-        meaningfulRounds.push({ round, originalIndex: i });
-      }
-    });
+    // Segmented bar chart for all candidates
+    const maxScore = Math.max(...result.standings.map(s => s.score), 1);
 
-    // Note about trivial eliminations (title list comes after the round cards)
-    if (trivialEliminated.length) {
-      html += `<p class="nerd-trivial">Books with no first-choice votes were removed before counting began.</p>`;
-    }
+    html += `<div class="tb-chart borda-chart">`;
+    html += `<div class="tb-header">Point breakdown by ranking position</div>`;
+    html += `<div class="tb-legend">`;
+    html += `<span class="tb-legend-item"><span class="tb-swatch tb-1st"></span>1st choice (3 pts each)</span>`;
+    html += `<span class="tb-legend-item"><span class="tb-swatch tb-2nd"></span>2nd choice (2 pts each)</span>`;
+    html += `<span class="tb-legend-item"><span class="tb-swatch tb-3rd"></span>3rd choice (1 pt each)</span>`;
+    html += `</div>`;
 
-    // Show only the meaningful rounds with compact cards
-    meaningfulRounds.forEach(({ round }, i) => {
-      html += `<div class="nerd-round">`;
-      html += `<div class="nerd-round-header">`;
-      html += `<strong>Round ${i + 1}</strong>`;
-      if (round.eliminated) html += ` &mdash; <span class="nerd-eliminated">"${round.eliminated}" eliminated</span>`;
-      if (round.winner) html += ` &mdash; <span class="nerd-winner">${votingOpen ? 'Leader' : 'Winner'}: ${round.winner}</span>`;
-      html += `</div>`;
+    result.standings.forEach(s => {
+      const p = s.positions;
+      const totalWidth = (s.score / maxScore) * 100;
+      const total = s.score;
+      // Segment widths as proportion of this candidate's total score
+      const pts1 = p.first * 3;
+      const pts2 = p.second * 2;
+      const pts3 = p.third * 1;
+      const w1 = total > 0 ? (pts1 / total) * totalWidth : 0;
+      const w2 = total > 0 ? (pts2 / total) * totalWidth : 0;
+      const w3 = total > 0 ? (pts3 / total) * totalWidth : 0;
+      const isWinner = result.winner === s.title;
 
-      // Explain tiebreaker when it was used — segmented mini-bars
-      if (round.tiebreaker) {
-        const tb = round.tiebreaker;
-        const maxScore = Math.max(...tb.tied.map(c => tb.scores[c]), 1);
-        const ranked = [...tb.tied].sort((a, b) => tb.scores[b] - tb.scores[a]);
-
-        html += `<div class="tb-chart">`;
-        html += `<div class="tb-header">Tiebreaker &mdash; ranked by overall support</div>`;
-        html += `<div class="tb-legend">`;
-        html += `<span class="tb-legend-item"><span class="tb-swatch tb-1st"></span>1st choice</span>`;
-        html += `<span class="tb-legend-item"><span class="tb-swatch tb-2nd"></span>2nd choice</span>`;
-        html += `<span class="tb-legend-item"><span class="tb-swatch tb-3rd"></span>3rd choice</span>`;
-        html += `</div>`;
-
-        ranked.forEach(c => {
-          const p = tb.positions[c];
-          const totalWidth = (tb.scores[c] / maxScore) * 100;
-          const total = tb.scores[c];
-          // Segment widths as proportion of this candidate's total score
-          const w1 = total > 0 ? ((p.first * 3) / total) * totalWidth : 0;
-          const w2 = total > 0 ? ((p.second * 2) / total) * totalWidth : 0;
-          const w3 = total > 0 ? ((p.third * 1) / total) * totalWidth : 0;
-          const isEliminated = round.eliminated === c;
-
-          html += `
-            <div class="tb-row${isEliminated ? ' tb-eliminated' : ''}">
-              <div class="tb-label">${c}</div>
-              <div class="tb-track">
-                ${p.first ? `<div class="tb-seg tb-1st" style="width:${w1}%">${p.first}</div>` : ''}
-                ${p.second ? `<div class="tb-seg tb-2nd" style="width:${w2}%">${p.second}</div>` : ''}
-                ${p.third ? `<div class="tb-seg tb-3rd" style="width:${w3}%">${p.third}</div>` : ''}
-              </div>
-              <div class="tb-score">${tb.scores[c]} pts</div>
-            </div>
-          `;
-        });
-        html += `</div>`;
-      }
-
-      const sorted = Object.entries(round.counts).sort((a, b) => b[1] - a[1]);
-      sorted.forEach(([title, count]) => {
-        const pct = result.totalVoters > 0 ? Math.round((count / result.totalVoters) * 100) : 0;
-        let barClass = 'bar-fill';
-        if (round.winner === title) barClass += ' winner';
-        else if (round.eliminated === title) barClass += ' eliminated';
-
-        html += `
-          <div class="bar-row compact">
-            <div class="bar-label">${title}</div>
-            <div class="bar-track"><div class="${barClass}" style="width:${pct}%"></div></div>
-            <div class="bar-count">${count} (${pct}%)</div>
+      html += `
+        <div class="tb-row${isWinner ? ' tb-winner' : ''}${s.score === 0 ? ' tb-zero' : ''}">
+          <div class="tb-label">${s.title}</div>
+          <div class="tb-track">
+            ${p.first ? `<div class="tb-seg tb-1st" style="width:${w1}%">${p.first}</div>` : ''}
+            ${p.second ? `<div class="tb-seg tb-2nd" style="width:${w2}%">${p.second}</div>` : ''}
+            ${p.third ? `<div class="tb-seg tb-3rd" style="width:${w3}%">${p.third}</div>` : ''}
           </div>
-        `;
-      });
-
-      html += `</div>`;
+          <div class="tb-score">${s.score} pts</div>
+        </div>
+      `;
     });
+    html += `</div>`;
 
-    // List the 0-vote titles at the bottom, low-key
-    if (trivialEliminated.length) {
-      html += `<p class="nerd-trivial-list">Removed: ${trivialEliminated.join(', ')}</p>`;
+    // Tiebreaker note
+    if (result.tiebroken) {
+      const top = result.standings[0];
+      const tied = result.standings.filter(s => s.score === top.score);
+      const tiedNames = tied.map(s => `"${s.title}"`).join(' and ');
+      let reason = '';
+      if (tied.length >= 2 && tied[0].positions.first !== tied[1].positions.first) {
+        reason = 'Won tiebreaker: most first-choice votes.';
+      } else if (tied.length >= 2 && tied[0].positions.second !== tied[1].positions.second) {
+        reason = 'Won tiebreaker: most second-choice votes.';
+      } else {
+        reason = 'Tied candidates broken by alphabetical order.';
+      }
+      html += `<p class="nerd-tiebreaker-note">${tiedNames} tied at ${top.score} points. ${reason}</p>`;
     }
 
     html += `</div></details>`;

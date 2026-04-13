@@ -11,9 +11,9 @@ what's going on and fix things when they break.
 A simple website where the Iron Lotus Sangha book group can:
 
 1. **Suggest books** they'd like the group to read
-2. **Vote** by picking their top 3 choices using ranked-choice voting (the least
-   popular are eliminated round by round until one wins)
-3. **See results** live, with a visual chart of each elimination round
+2. **Vote** by picking their top 3 choices using ranked voting (Borda count — 1st choice
+   = 3 pts, 2nd = 2 pts, 3rd = 1 pt; highest total wins)
+3. **See results** live, with a visual chart showing point breakdowns
 4. **Review past rounds** in a history page
 
 There's also a **password-protected gate** (each round has its own password) and
@@ -78,12 +78,12 @@ All website files are in the GitHub repo. Here's what each one does:
 | `index.html` | Landing page with password gate. Enter round name + password to get in. |
 | `books.html` | Lists all suggested books for the current round |
 | `suggest.html` | Form to submit a book suggestion |
-| `vote.html` | Click-to-select top-3 ranked-choice voting interface |
-| `results.html` | Live results with bar chart visualization of each RCV round |
+| `vote.html` | Click-to-select top-3 ranked voting interface |
+| `results.html` | Live results with point breakdown visualization (Borda count) |
 | `history.html` | Past rounds (public, no password needed) |
 | `admin.html` | Admin panel — create rounds, toggle submissions/voting, complete rounds |
 | `styles.css` | All visual styling (Georgia font, green accent, large text for accessibility) |
-| `app.js` | All shared JavaScript — API client, data cache, RCV algorithm, session management, utilities |
+| `app.js` | All shared JavaScript — API client, data cache, Borda count algorithm, session management, utilities |
 | `apps-script.js` | The backend code (copy of what's in Google Apps Script — for reference) |
 
 ### Two Critical Values in `app.js`
@@ -229,7 +229,7 @@ Anyone maintaining this system needs access to:
 - **No server.** Cloudflare Pages serves static files. Google Apps Script is the only backend.
 - **No database.** Google Sheets is the database. Simple, visible, editable by anyone with access.
 - **CORS handling.** The frontend sends POST requests with `Content-Type: text/plain` to avoid CORS preflight requests (a browser security thing). This is intentional.
-- **RCV runs client-side.** The ranked-choice voting calculation happens in the browser (`app.js` → `RCV.calculate()`), not on the server. The server just stores raw vote rankings.
+- **Borda count runs client-side.** The voting calculation happens in the browser (`app.js` → `RCV.calculate()` — named `RCV` for historical reasons but uses Borda count), not on the server. The server just stores raw vote rankings.
 - **Persistent sessions.** The round name and password are stored in localStorage (persists across tabs and browser restarts). Users only need to enter the password once. The Sign Out button clears it.
 - **Client-side caching.** API responses are cached for 60 seconds (in memory + localStorage) to avoid redundant calls when navigating between pages. Cache clears automatically on sign-out or after submitting a suggestion/vote.
 - **Combined API endpoint.** The `getRoundWithBooks` endpoint returns round info and book suggestions in a single request, cutting landing page and vote page load times roughly in half.

@@ -10,7 +10,7 @@
   <div id="header"></div>
   <div class="page-wrap">
     <h1>Vote for Our Next Book</h1>
-    <p class="subtitle">Pick your top 3 choices using ranked-choice voting.</p>
+    <p class="subtitle">Pick your top 3 choices using ranked voting.</p>
 
     <div id="msg" class="msg msg-error hidden"></div>
 
@@ -23,11 +23,11 @@
       <span class="loading-text">Loading books…</span>
     </div>
 
-    <!-- RCV Explainer (collapsible) -->
+    <!-- Voting Explainer (collapsible) -->
     <div id="explainer" style="margin-bottom:2rem;">
       <details>
         <summary style="cursor:pointer; font-size:1.1rem; font-weight:bold; color:#3b6e48; margin-bottom:0.75rem;">
-          How does ranked-choice voting work?
+          How does the voting work?
         </summary>
         <div class="card" style="margin-top:0.5rem;">
           <p class="card-text" style="margin-bottom:0.75rem;">
@@ -37,16 +37,16 @@
             Here's how the winner is determined:
           </p>
           <p class="card-text" style="margin-bottom:0.5rem;">
-            <strong>Step 1:</strong> Everyone's first-choice votes are counted. If any book gets more than half the votes, it wins right away.
+            Your <strong>1st choice</strong> earns 3 points. Your <strong>2nd choice</strong> earns 2 points. Your <strong>3rd choice</strong> earns 1 point.
           </p>
           <p class="card-text" style="margin-bottom:0.5rem;">
-            <strong>Step 2:</strong> If no book has a majority, the book with the <em>fewest</em> first-choice votes is eliminated.
+            We add up everyone's points, and the <strong>book with the most total points wins</strong>.
           </p>
-          <p class="card-text" style="margin-bottom:0.5rem;">
-            <strong>Step 3:</strong> If your first choice was eliminated, your vote moves to your second choice. Then we count again.
+          <p class="card-text" style="margin-bottom:0.75rem;">
+            The result is a book that most people are happy with, even if it wasn't everyone's first pick.
           </p>
-          <p class="card-text">
-            <strong>This repeats</strong> until one book has a majority. The result is a book that most people are happy with, even if it wasn't everyone's first pick.
+          <p class="card-text" style="font-size:0.9rem; color:#777;">
+            You may have heard this kind of voting called "ranked-choice." Our method is actually a specific type of ranked voting called a <strong>Borda count</strong> — it's designed for small groups like ours because it values <em>everyone's</em> rankings, not just first-choice votes. Every pick you make matters.
           </p>
         </div>
       </details>
