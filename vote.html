@@ -259,7 +259,7 @@
           voterName: name,
           voterEmail: email,
           rankings: picks,
-          resultsUrl: window.location.origin + window.location.pathname.replace('vote.html', 'results.html')
+          resultsUrl: window.location.origin + window.location.pathname.replace(/\/vote(\.html)?$/, '/results')
         });
 
         if (result.error) {
