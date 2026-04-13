@@ -205,20 +205,27 @@ const RCV = {
    * 1st-place mention = 3 pts, 2nd = 2 pts, 3rd = 1 pt.
    * The candidate with the lowest weighted score is eliminated.
    * If still tied, falls back to alphabetical order.
-   * Returns: { eliminated, scores }
+   * Returns: { eliminated, scores, positions }
+   *   positions: { title: { first: n, second: n, third: n } }
    */
   _leastSupported(tied, ballots) {
     const scores = {};
-    tied.forEach(c => scores[c] = 0);
+    const positions = {};
+    tied.forEach(c => {
+      scores[c] = 0;
+      positions[c] = { first: 0, second: 0, third: 0 };
+    });
     ballots.forEach(ballot => {
       tied.forEach(c => {
         const pos = ballot.indexOf(c);
-        if (pos !== -1) scores[c] += (3 - pos); // 1st=3, 2nd=2, 3rd=1
+        if (pos === 0) { positions[c].first++; scores[c] += 3; }
+        else if (pos === 1) { positions[c].second++; scores[c] += 2; }
+        else if (pos === 2) { positions[c].third++; scores[c] += 1; }
       });
     });
     const minScore = Math.min(...tied.map(c => scores[c]));
     const weakest = tied.filter(c => scores[c] === minScore);
-    return { eliminated: weakest.sort()[weakest.length - 1], scores };
+    return { eliminated: weakest.sort()[weakest.length - 1], scores, positions };
   },
 
   /**
@@ -270,17 +277,17 @@ const RCV = {
           return { winner: sorted[0], rounds, totalVoters };
         }
         // Tied on first-choice: use weighted support to break it
-        const { eliminated: loser, scores } = this._leastSupported(remaining, ballots);
+        const { eliminated: loser, scores, positions } = this._leastSupported(remaining, ballots);
         if (scores[sorted[0]] !== scores[sorted[1]]) {
           const winner = loser === sorted[0] ? sorted[1] : sorted[0];
           roundInfo.winner = winner;
-          roundInfo.tiebreaker = { tied: [...remaining], scores };
+          roundInfo.tiebreaker = { tied: [...remaining], scores, positions };
           rounds.push(roundInfo);
           return { winner, rounds, totalVoters };
         }
         // True tie — identical first-choice AND weighted support
         roundInfo.winner = sorted[0] + ' (tie)';
-        roundInfo.tiebreaker = { tied: [...remaining], scores };
+        roundInfo.tiebreaker = { tied: [...remaining], scores, positions };
         rounds.push(roundInfo);
         return { winner: sorted[0] + ' (tie)', rounds, totalVoters };
       }
@@ -292,9 +299,9 @@ const RCV = {
       const tiedAtBottom = toEliminate.length > 1;
       let eliminated;
       if (tiedAtBottom) {
-        const result = this._leastSupported(toEliminate, ballots);
-        eliminated = result.eliminated;
-        roundInfo.tiebreaker = { tied: toEliminate, scores: result.scores };
+        const tbResult = this._leastSupported(toEliminate, ballots);
+        eliminated = tbResult.eliminated;
+        roundInfo.tiebreaker = { tied: toEliminate, scores: tbResult.scores, positions: tbResult.positions };
       } else {
         eliminated = toEliminate[0];
       }
@@ -418,14 +425,43 @@ const RCV = {
       if (round.winner) html += ` &mdash; <span class="nerd-winner">${votingOpen ? 'Leader' : 'Winner'}: ${round.winner}</span>`;
       html += `</div>`;
 
-      // Explain tiebreaker when it was used
+      // Explain tiebreaker when it was used — segmented mini-bars
       if (round.tiebreaker) {
         const tb = round.tiebreaker;
-        const details = tb.tied
-          .sort((a, b) => tb.scores[b] - tb.scores[a])
-          .map(c => `${c}: ${tb.scores[c]} pts`)
-          .join(', ');
-        html += `<div class="nerd-tiebreaker">Tiebreaker — weighted support (1st=3, 2nd=2, 3rd=1): ${details}</div>`;
+        const maxScore = Math.max(...tb.tied.map(c => tb.scores[c]), 1);
+        const ranked = [...tb.tied].sort((a, b) => tb.scores[b] - tb.scores[a]);
+
+        html += `<div class="tb-chart">`;
+        html += `<div class="tb-header">Tiebreaker &mdash; ranked by overall support</div>`;
+        html += `<div class="tb-legend">`;
+        html += `<span class="tb-legend-item"><span class="tb-swatch tb-1st"></span>1st choice</span>`;
+        html += `<span class="tb-legend-item"><span class="tb-swatch tb-2nd"></span>2nd choice</span>`;
+        html += `<span class="tb-legend-item"><span class="tb-swatch tb-3rd"></span>3rd choice</span>`;
+        html += `</div>`;
+
+        ranked.forEach(c => {
+          const p = tb.positions[c];
+          const totalWidth = (tb.scores[c] / maxScore) * 100;
+          const total = tb.scores[c];
+          // Segment widths as proportion of this candidate's total score
+          const w1 = total > 0 ? ((p.first * 3) / total) * totalWidth : 0;
+          const w2 = total > 0 ? ((p.second * 2) / total) * totalWidth : 0;
+          const w3 = total > 0 ? ((p.third * 1) / total) * totalWidth : 0;
+          const isEliminated = round.eliminated === c;
+
+          html += `
+            <div class="tb-row${isEliminated ? ' tb-eliminated' : ''}">
+              <div class="tb-label">${c}</div>
+              <div class="tb-track">
+                ${p.first ? `<div class="tb-seg tb-1st" style="width:${w1}%">${p.first}</div>` : ''}
+                ${p.second ? `<div class="tb-seg tb-2nd" style="width:${w2}%">${p.second}</div>` : ''}
+                ${p.third ? `<div class="tb-seg tb-3rd" style="width:${w3}%">${p.third}</div>` : ''}
+              </div>
+              <div class="tb-score">${tb.scores[c]} pts</div>
+            </div>
+          `;
+        });
+        html += `</div>`;
       }
 
       const sorted = Object.entries(round.counts).sort((a, b) => b[1] - a[1]);
