@@ -18,6 +18,11 @@
       Voting is not open yet for this round. You'll receive an email or message when it's time to vote.
     </div>
 
+    <div id="loadingIndicator" style="text-align:center; padding:2rem 0;">
+      <span class="spinner"></span>
+      <span class="loading-text">Loading books…</span>
+    </div>
+
     <!-- RCV Explainer (collapsible) -->
     <div id="explainer" style="margin-bottom:2rem;">
       <details>
@@ -100,9 +105,11 @@
     init();
 
     async function init() {
+      const loader = document.getElementById('loadingIndicator');
       try {
         // Single combined request: round info + books in one call
         const data = await API.getRoundWithBooks(Session.getRound(), Session.getPassword());
+        loader.classList.add('hidden');
         const round = data.round;
 
         if (!round.votingOpen) {
@@ -124,6 +131,7 @@
         render();
         document.getElementById('voteSection').classList.remove('hidden');
       } catch (err) {
+        loader.classList.add('hidden');
         showMsg('msg', 'Could not load voting data. Please refresh and try again.');
       }
     }
