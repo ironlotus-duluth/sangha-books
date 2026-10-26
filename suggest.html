@@ -11,6 +11,7 @@
   <div class="page-wrap">
     <h1>Suggest a Book</h1>
     <p class="subtitle">Recommend a book for the group to consider reading next.</p>
+    <p id="limitNote" class="msg msg-info hidden"></p>
 
     <div id="msg" class="msg msg-error hidden"></div>
 
@@ -44,9 +45,10 @@
     <div id="successMsg" class="msg msg-success hidden" style="text-align:center;">
       <h2 style="margin-bottom:0.25rem;">Thank you!</h2>
       <p>Your book suggestion has been submitted. We'll include it when voting opens.</p>
+      <p id="limitReachedNote" class="hidden" style="margin-top:0.5rem;"></p>
       <p style="margin-top:1rem;">
-        <a href="#" id="anotherLink">Submit another suggestion</a>
-        &nbsp;&nbsp;|&nbsp;&nbsp;
+        <span id="anotherWrap"><a href="#" id="anotherLink">Submit another suggestion</a>
+        &nbsp;&nbsp;|&nbsp;&nbsp;</span>
         <a href="books.html">View all submitted books</a>
       </p>
     </div>
@@ -61,6 +63,7 @@
 
     const form = document.getElementById('form');
     const submitBtn = document.getElementById('submitBtn');
+    let lastName = '';
 
     // Check if submissions are open
     checkStatus();
@@ -71,6 +74,12 @@
         // Uses cached round data if available (from landing page visit)
         const round = await API.getRound(Session.getRound(), Session.getPassword());
         loader.classList.add('hidden');
+        const limitText = suggestionLimitText(round && round.maxPerPerson);
+        if (limitText) {
+          const note = document.getElementById('limitNote');
+          note.textContent = limitText;
+          note.classList.remove('hidden');
+        }
         if (round && !round.submissionsOpen) {
           document.getElementById('closedMsg').classList.remove('hidden');
         } else {
@@ -102,6 +111,7 @@
       submitBtn.textContent = 'Submitting...';
 
       try {
+        lastName = data.submitterName;
         const result = await API.submitSuggestion(data);
         if (result.error) {
           showMsg('msg', result.error);
@@ -112,6 +122,17 @@
         DataCache.clear(); // Clear cache so book list refreshes
         form.classList.add('hidden');
         document.getElementById('successMsg').classList.remove('hidden');
+
+        // At the per-person limit: thank them instead of offering another
+        const atLimit = result.limit && result.count >= result.limit;
+        document.getElementById('anotherWrap').classList.toggle('hidden', !!atLimit);
+        const limitNote = document.getElementById('limitReachedNote');
+        if (atLimit) {
+          limitNote.textContent = `That's your ${result.limit} for now — thank you! If we need more titles, we'll let everyone know.`;
+          limitNote.classList.remove('hidden');
+        } else {
+          limitNote.classList.add('hidden');
+        }
       } catch (err) {
         showMsg('msg', 'Something went wrong. Please try again.');
         submitBtn.disabled = false;
@@ -126,6 +147,8 @@
       document.getElementById('successMsg').classList.add('hidden');
       submitBtn.disabled = false;
       submitBtn.textContent = 'Submit Suggestion';
+      // Keep their name filled in for the next one
+      document.getElementById('name').value = lastName;
     });
   </script>
 </body>

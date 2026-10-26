@@ -1,5 +1,7 @@
 # Sangha Book Group App — Maintenance Guide
 
+> **Newer, friendlier guide:** [HANDOFF.md](HANDOFF.md) is the current handoff document. This file is kept for its older troubleshooting detail.
+
 A complete reference for anyone maintaining this system. Written so that a
 reasonably tech-comfortable person (not necessarily a developer) can understand
 what's going on and fix things when they break.
@@ -246,4 +248,4 @@ Everything is free:
 - Gmail sending: free (up to ~100 emails/day)
 - Google Cloud OAuth: free (no billing required for basic OAuth)
 
-There is nothing to renew or pay for. The only thing that could expire is the domain name, if you set up a custom one.
+The only thing to renew is the domain `ironlot.us` (registered at Namecheap, next renewal 2027-05-28). If it lapses, the site is still reachable at `sangha-books.pages.dev`.

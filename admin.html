@@ -60,7 +60,7 @@
 
         <h3 style="color:#4a7c59;">1. Create a new round</h3>
         <p class="card-text" style="margin-bottom:1rem;">
-          Use the form below to pick a name (e.g. "Fall 2026") and a password. The password is what you'll share with the group so they can access the site. Submissions open automatically when you create a round.
+          Use the form below to pick a name (e.g. "Fall 2026") and a password. The password is what you'll share with the group so they can access the site. Submissions open automatically when you create a round. "Books per person" caps how many suggestions each person can make (2 by default) — you can raise it later if the list is too short.
         </p>
 
         <h3 style="color:#4a7c59;">2. Collect book suggestions</h3>
@@ -70,7 +70,7 @@
 
         <h3 style="color:#4a7c59;">3. Close submissions, open voting</h3>
         <p class="card-text" style="margin-bottom:1rem;">
-          Once you have enough book suggestions, come back here and click <strong>"Close Submissions"</strong> on the active round. Then click <strong>"Open Voting"</strong>. Let the group know it's time to vote. They'll rank the books by dragging them into their preferred order.
+          Once you have enough book suggestions, come back here and click <strong>"Close Submissions"</strong> on the active round. Then click <strong>"Open Voting"</strong>. Let the group know it's time to vote. They'll click their top 3 books in order of preference.
         </p>
 
         <h3 style="color:#4a7c59;">4. Wait for votes</h3>
@@ -111,6 +111,11 @@
           <label for="newRoundPassword">Round Password</label>
           <input type="text" id="newRoundPassword" placeholder="e.g. dharma2026" style="margin-bottom:0;">
           <p class="hint">This is the password you'll share with the group.</p>
+        </div>
+        <div>
+          <label for="newRoundMax">Books per person</label>
+          <input type="number" id="newRoundMax" value="2" min="1" style="margin-bottom:0; max-width:8rem;">
+          <p class="hint">How many books each person may suggest. Leave blank for no limit. You can change this anytime.</p>
         </div>
         <button class="btn btn-primary" id="createRoundBtn">Create Round</button>
       </div>
@@ -257,10 +262,7 @@
           summary: summary
         });
 
-        if (result.error) {
-          showMsg('adminMsg', 'Failed to save: ' + result.error);
-          return;
-        }
+        if (adminError(result)) return;
 
         // Brief visual feedback
         const btn = textarea.nextElementSibling;
@@ -303,13 +305,13 @@
           action: 'adminCreateRound',
           token: adminToken,
           roundName: name,
-          roundPassword: pw
+          roundPassword: pw,
+          maxPerPerson: document.getElementById('newRoundMax').value.trim()
         });
-        if (result.error) {
-          showMsg('adminMsg', result.error);
-        } else {
+        if (!adminError(result)) {
           document.getElementById('newRoundName').value = '';
           document.getElementById('newRoundPassword').value = '';
+          document.getElementById('newRoundMax').value = '2';
           loadAdmin(); // Refresh
         }
       } catch (err) {
@@ -328,7 +330,8 @@
 
       list.innerHTML = rounds.map(r => {
         const isActive = !r.completed;
-        const created = r.created ? new Date(r.created).toLocaleDateString() : '';
+        const createdDate = new Date(r.created);
+        const created = r.created && !isNaN(createdDate) ? createdDate.toLocaleDateString() : '';
         const completed = r.completed ? new Date(r.completed).toLocaleDateString() : '';
 
         return `
@@ -362,6 +365,14 @@
                 Submissions: <strong>${r.submissionsOpen ? 'Open' : 'Closed'}</strong>
                 &nbsp;&middot;&nbsp;
                 Voting: <strong>${r.votingOpen ? 'Open' : 'Closed'}</strong>
+                &nbsp;&middot;&nbsp;
+                Books per person: <strong>${r.maxPerPerson || 'No limit'}</strong>
+              </div>
+              <div style="margin-top:0.75rem; display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                <label for="maxPerPerson" style="margin:0; font-size:0.9rem;">Change books per person:</label>
+                <input type="number" id="maxPerPerson" min="1" value="${r.maxPerPerson || ''}" placeholder="No limit"
+                       style="margin:0; max-width:7rem; padding:0.35rem 0.5rem;">
+                <button class="btn btn-small btn-outline" onclick="setMaxPerPerson('${escAttr(r.name)}')">Save</button>
               </div>
             ` : ''}
           </div>
@@ -371,14 +382,42 @@
 
     let _cachedRounds = []; // Local state for optimistic updates
 
-    async function toggleSubmissions(roundName, open) {
+    // Google sign-ins expire after about an hour; the backend then answers "Unauthorized."
+    function adminError(result) {
+      if (!result || !result.error) return false;
+      showMsg('adminMsg', result.error === 'Unauthorized.'
+        ? 'Your sign-in has expired. Please sign out and sign in again, then retry.'
+        : result.error);
+      return true;
+    }
+
+    async function setMaxPerPerson(roundName) {
+      hideMsg('adminMsg');
+      const val = document.getElementById('maxPerPerson').value.trim();
       try {
-        await API.adminPost({
+        const result = await API.adminPost({
+          action: 'adminSetMaxPerPerson',
+          token: adminToken,
+          roundName,
+          maxPerPerson: val
+        });
+        if (adminError(result)) return;
+        const r = _cachedRounds.find(r => r.name === roundName);
+        if (r) { r.maxPerPerson = result.maxPerPerson; renderRounds(_cachedRounds); }
+        else { loadAdmin(); }
+      } catch (e) { showMsg('adminMsg', 'Failed to update.'); }
+    }
+
+    async function toggleSubmissions(roundName, open) {
+      hideMsg('adminMsg');
+      try {
+        const result = await API.adminPost({
           action: 'adminToggleSubmissions',
           token: adminToken,
           roundName,
           open
         });
+        if (adminError(result)) return;
         // Optimistic update: re-render from local state instead of full reload
         const r = _cachedRounds.find(r => r.name === roundName);
         if (r) { r.submissionsOpen = open; renderRounds(_cachedRounds); }
@@ -387,13 +426,15 @@
     }
 
     async function toggleVoting(roundName, open) {
+      hideMsg('adminMsg');
       try {
-        await API.adminPost({
+        const result = await API.adminPost({
           action: 'adminToggleVoting',
           token: adminToken,
           roundName,
           open
         });
+        if (adminError(result)) return;
         // Optimistic update: re-render from local state instead of full reload
         const r = _cachedRounds.find(r => r.name === roundName);
         if (r) { r.votingOpen = open; renderRounds(_cachedRounds); }
@@ -403,12 +444,14 @@
 
     async function completeRound(roundName) {
       if (!confirm(`Complete the "${roundName}" round? This will close submissions and voting.`)) return;
+      hideMsg('adminMsg');
       try {
-        await API.adminPost({
+        const result = await API.adminPost({
           action: 'adminCompleteRound',
           token: adminToken,
           roundName
         });
+        if (adminError(result)) return;
         loadAdmin();
       } catch (e) { showMsg('adminMsg', 'Failed to complete round.'); }
     }

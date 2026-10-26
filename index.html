@@ -52,7 +52,7 @@
             <h3>Suggest a Book</h3>
             <span class="status-badge" id="suggestBadge">Loading...</span>
           </div>
-          <p class="card-text">Recommend a book for the group to read next.</p>
+          <p class="card-text" id="suggestCardText">Recommend a book for the group to read next.</p>
         </a>
 
         <a href="vote.html" id="voteCard" class="card landing-card">
@@ -173,6 +173,21 @@
           landing.classList.add('hidden');
           showMsg('gateMsg', 'Session expired. Please enter the password again.');
           return;
+        }
+
+        // Saved password is from a round that has since ended
+        if (round.completed) {
+          Session.clear();
+          renderHeader(document.getElementById('header'));
+          gate.classList.remove('hidden');
+          landing.classList.add('hidden');
+          showMsg('gateMsg', `The "${round.name}" round has ended. Enter the new round's password to join.`, 'info');
+          return;
+        }
+
+        if (round.maxPerPerson) {
+          document.getElementById('suggestCardText').textContent =
+            `Recommend up to ${round.maxPerPerson} book${round.maxPerPerson !== 1 ? 's' : ''} for the group to read next.`;
         }
 
         // Update suggestion card status

@@ -15,6 +15,11 @@ const ADMIN_EMAILS = [
 // Needed to verify admin sign-in tokens
 const GOOGLE_CLIENT_ID = '899264795528-7kms1n19ftmfdgj41e4gnds45d2uls37.apps.googleusercontent.com';
 
+// Default cap on book suggestions per person for new rounds (0 = no limit).
+// Each round stores its own cap in the Rounds sheet ("Max Per Person", column G),
+// so it can be raised mid-round from the admin page or by editing that cell.
+const DEFAULT_MAX_PER_PERSON = 2;
+
 // ---------- SHEET HELPERS ----------
 
 function getSheet(name) {
@@ -24,7 +29,7 @@ function getSheet(name) {
     sheet = ss.insertSheet(name);
     switch (name) {
       case 'Rounds':
-        sheet.appendRow(['Round Name', 'Password', 'Submissions Open', 'Voting Open', 'Created', 'Completed']);
+        sheet.appendRow(['Round Name', 'Password', 'Submissions Open', 'Voting Open', 'Created', 'Completed', 'Max Per Person']);
         break;
       case 'Suggestions':
         sheet.appendRow(['Timestamp', 'Round', 'Submitter Name', 'Book Title', 'Author', 'Link', 'Summary']);
@@ -69,6 +74,50 @@ function getCurrentRound() {
 function getRoundByName(name) {
   const rounds = sheetToObjects(getSheet('Rounds'));
   return rounds.find(r => r['Round Name'] === name) || null;
+}
+
+// Rounds sheets created before the per-person cap existed lack column G's header
+function ensureMaxPerPersonColumn(sheet) {
+  if (sheet.getRange(1, 7).getValue() !== 'Max Per Person') {
+    sheet.getRange(1, 7).setValue('Max Per Person');
+  }
+}
+
+// 0 means no limit (also the case for older rounds with a blank cell)
+function getMaxPerPerson(round) {
+  const n = parseInt(round['Max Per Person'], 10);
+  return n > 0 ? n : 0;
+}
+
+function isOpen(value) {
+  return value === true || value === 'TRUE';
+}
+
+// Shape returned to the frontend for a round
+function roundInfo(round) {
+  return {
+    name: round['Round Name'],
+    submissionsOpen: isOpen(round['Submissions Open']),
+    votingOpen: isOpen(round['Voting Open']),
+    created: round['Created'],
+    completed: !!round['Completed'],
+    maxPerPerson: getMaxPerPerson(round)
+  };
+}
+
+// Loose comparison keys: case/punctuation/spacing-insensitive
+function normalizeName(name) {
+  return String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+// Compares main titles only, so "Not Always So" matches "Not Always So: Practicing..."
+function normalizeTitle(title) {
+  return String(title || '').split(':')[0].toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function escapeHtml(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function validateRoundPassword(roundName, password) {
@@ -119,12 +168,7 @@ function doGet(e) {
           result = { error: 'Invalid password.' };
           break;
         }
-        result = {
-          name: round['Round Name'],
-          submissionsOpen: round['Submissions Open'] === true || round['Submissions Open'] === 'TRUE',
-          votingOpen: round['Voting Open'] === true || round['Voting Open'] === 'TRUE',
-          created: round['Created']
-        };
+        result = roundInfo(round);
         break;
       }
 
@@ -144,12 +188,7 @@ function doGet(e) {
         const rwbName = rwbRound['Round Name'];
         const rwbSuggestions = sheetToObjects(getSheet('Suggestions'));
         result = {
-          round: {
-            name: rwbName,
-            submissionsOpen: rwbRound['Submissions Open'] === true || rwbRound['Submissions Open'] === 'TRUE',
-            votingOpen: rwbRound['Voting Open'] === true || rwbRound['Voting Open'] === 'TRUE',
-            created: rwbRound['Created']
-          },
+          round: roundInfo(rwbRound),
           books: rwbSuggestions
             .filter(s => s['Round'] === rwbName)
             .map(s => ({
@@ -244,12 +283,8 @@ function doGet(e) {
           break;
         }
         const rounds = sheetToObjects(getSheet('Rounds'));
-        result = rounds.map(r => ({
-          name: r['Round Name'],
+        result = rounds.map(r => Object.assign(roundInfo(r), {
           password: r['Password'],
-          submissionsOpen: r['Submissions Open'] === true || r['Submissions Open'] === 'TRUE',
-          votingOpen: r['Voting Open'] === true || r['Voting Open'] === 'TRUE',
-          created: r['Created'],
           completed: r['Completed']
         }));
         break;
@@ -284,21 +319,54 @@ function doPost(e) {
           result = { error: 'Invalid round or password.' };
           break;
         }
-        if (!(round['Submissions Open'] === true || round['Submissions Open'] === 'TRUE')) {
+        if (round['Completed'] || !isOpen(round['Submissions Open'])) {
           result = { error: 'Submissions are closed for this round.' };
           break;
         }
 
-        getSheet('Suggestions').appendRow([
-          new Date().toISOString(),
-          data.round,
-          data.submitterName,
-          data.bookTitle,
-          data.author,
-          data.link || '',
-          data.summary || ''
-        ]);
-        result = { success: true };
+        // Lock so two simultaneous submissions can't both slip past the checks below
+        const sLock = LockService.getScriptLock();
+        sLock.waitLock(20000);
+        try {
+          const sugSheet = getSheet('Suggestions');
+          const roundBooks = sheetToObjects(sugSheet).filter(s => s['Round'] === data.round);
+
+          // Same book already on the list? Doesn't count against the person's limit.
+          const titleKey = normalizeTitle(data.bookTitle);
+          const dup = roundBooks.find(s => normalizeTitle(s['Book Title']) === titleKey);
+          if (titleKey && dup) {
+            result = {
+              error: '"' + dup['Book Title'] + '" is already on the list (suggested by ' +
+                dup['Submitter Name'] + ') — great minds! Please choose a different book.'
+            };
+            break;
+          }
+
+          const limit = getMaxPerPerson(round);
+          const nameKey = normalizeName(data.submitterName);
+          const already = roundBooks.filter(s => normalizeName(s['Submitter Name']) === nameKey).length;
+          if (limit && already >= limit) {
+            result = {
+              error: 'You\'ve already suggested ' + already + ' book' + (already !== 1 ? 's' : '') +
+                ' this round, which is the limit for now. If we need more titles, we\'ll open it up and let everyone know.',
+              limitReached: true
+            };
+            break;
+          }
+
+          sugSheet.appendRow([
+            new Date().toISOString(),
+            data.round,
+            data.submitterName,
+            data.bookTitle,
+            data.author,
+            data.link || '',
+            data.summary || ''
+          ]);
+          result = { success: true, count: already + 1, limit: limit };
+        } finally {
+          sLock.releaseLock();
+        }
         break;
       }
 
@@ -308,35 +376,42 @@ function doPost(e) {
           result = { error: 'Invalid round or password.' };
           break;
         }
-        if (!(round['Voting Open'] === true || round['Voting Open'] === 'TRUE')) {
+        if (round['Completed'] || !isOpen(round['Voting Open'])) {
           result = { error: 'Voting is not open for this round.' };
           break;
         }
 
-        // Check for duplicate voter (by email, if provided)
-        // Uses TextFinder for targeted search instead of reading entire sheet
-        if (data.voterEmail) {
-          const votesSheet = getSheet('Votes');
-          const finder = votesSheet.createTextFinder(data.voterEmail.toLowerCase()).matchCase(false);
-          const matches = finder.findAll();
-          for (const cell of matches) {
-            const row = cell.getRow();
-            const rowRound = votesSheet.getRange(row, 2).getValue(); // Column B = Round
-            if (rowRound === data.round) {
-              result = { error: 'You have already voted in this round. Each person may vote once.' };
-              break;
+        const vLock = LockService.getScriptLock();
+        vLock.waitLock(20000);
+        try {
+          // Check for duplicate voter (by email, if provided)
+          // Uses TextFinder for targeted search instead of reading entire sheet.
+          // matchEntireCell so "bo@x.com" doesn't match "jimbo@x.com".
+          if (data.voterEmail) {
+            const votesSheet = getSheet('Votes');
+            const finder = votesSheet.createTextFinder(data.voterEmail.trim()).matchCase(false).matchEntireCell(true);
+            const matches = finder.findAll();
+            for (const cell of matches) {
+              const row = cell.getRow();
+              const rowRound = votesSheet.getRange(row, 2).getValue(); // Column B = Round
+              if (rowRound === data.round) {
+                result = { error: 'You have already voted in this round. Each person may vote once.' };
+                break;
+              }
             }
+            if (result) break;
           }
-          if (result) break;
-        }
 
-        getSheet('Votes').appendRow([
-          new Date().toISOString(),
-          data.round,
-          data.voterName,
-          data.voterEmail || '',
-          JSON.stringify(data.rankings)
-        ]);
+          getSheet('Votes').appendRow([
+            new Date().toISOString(),
+            data.round,
+            data.voterName,
+            data.voterEmail || '',
+            JSON.stringify(data.rankings)
+          ]);
+        } finally {
+          vLock.releaseLock();
+        }
 
         // Send confirmation email if email provided
         if (data.voterEmail) {
@@ -356,11 +431,11 @@ function doPost(e) {
               {
                 name: 'Iron Lotus Sangha',
                 htmlBody:
-                  '<p>Hi ' + data.voterName + ',</p>' +
-                  '<p>Thank you for voting in <strong>"' + data.round + '"</strong>!</p>' +
+                  '<p>Hi ' + escapeHtml(data.voterName) + ',</p>' +
+                  '<p>Thank you for voting in <strong>"' + escapeHtml(data.round) + '"</strong>!</p>' +
                   '<p>Here is how you ranked the books:</p>' +
-                  '<ol>' + data.rankings.map(t => '<li>' + t + '</li>').join('') + '</ol>' +
-                  (resultsUrl ? '<p><a href="' + resultsUrl + '">Check the current standings anytime</a></p>' : '') +
+                  '<ol>' + data.rankings.map(t => '<li>' + escapeHtml(t) + '</li>').join('') + '</ol>' +
+                  (resultsUrl ? '<p><a href="' + escapeHtml(resultsUrl) + '">Check the current standings anytime</a></p>' : '') +
                   '<p>With gratitude,<br>Iron Lotus Sangha</p>'
               }
             );
@@ -381,9 +456,16 @@ function doPost(e) {
           result = { error: 'Unauthorized.' };
           break;
         }
-        // Close any currently open round
         const sheet = getSheet('Rounds');
         const rounds = sheetToObjects(sheet);
+        // Reusing a name would mix the new round's books and votes with the old one's
+        if (rounds.some(r => normalizeName(r['Round Name']) === normalizeName(data.roundName))) {
+          result = { error: 'A round named "' + data.roundName + '" already exists. Please choose a different name.' };
+          break;
+        }
+        ensureMaxPerPersonColumn(sheet);
+
+        // Close any currently open round
         rounds.forEach((r, i) => {
           if (!r['Completed']) {
             sheet.getRange(i + 2, 6).setValue(new Date().toISOString()); // Mark completed
@@ -396,7 +478,8 @@ function doPost(e) {
           'TRUE',   // Submissions open by default
           'FALSE',  // Voting closed by default
           new Date().toISOString(),
-          ''         // Not completed
+          '',        // Not completed
+          data.maxPerPerson === undefined ? DEFAULT_MAX_PER_PERSON : (parseInt(data.maxPerPerson, 10) || '')
         ]);
         result = { success: true };
         break;
@@ -441,10 +524,27 @@ function doPost(e) {
         const cRounds = sheetToObjects(cSheet);
         const cIdx = cRounds.findIndex(r => r['Round Name'] === data.roundName);
         if (cIdx === -1) { result = { error: 'Round not found.' }; break; }
-        cSheet.getRange(cIdx + 2, 5).setValue('FALSE'); // Close submissions
-        cSheet.getRange(cIdx + 2, 4).setValue('FALSE'); // Close voting
+        cSheet.getRange(cIdx + 2, 3).setValue('FALSE'); // Column C = Submissions Open
+        cSheet.getRange(cIdx + 2, 4).setValue('FALSE'); // Column D = Voting Open
         cSheet.getRange(cIdx + 2, 6).setValue(new Date().toISOString()); // Mark completed
+        CacheService.getScriptCache().remove('history'); // Show it in Past Rounds right away
         result = { success: true };
+        break;
+      }
+
+      case 'adminSetMaxPerPerson': {
+        if (!verifyGoogleToken(data.token)) {
+          result = { error: 'Unauthorized.' };
+          break;
+        }
+        const mSheet = getSheet('Rounds');
+        const mRounds = sheetToObjects(mSheet);
+        const mIdx = mRounds.findIndex(r => r['Round Name'] === data.roundName);
+        if (mIdx === -1) { result = { error: 'Round not found.' }; break; }
+        ensureMaxPerPersonColumn(mSheet);
+        const mVal = parseInt(data.maxPerPerson, 10);
+        mSheet.getRange(mIdx + 2, 7).setValue(mVal > 0 ? mVal : ''); // Column G; blank = no limit
+        result = { success: true, maxPerPerson: mVal > 0 ? mVal : 0 };
         break;
       }
 

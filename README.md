@@ -4,22 +4,28 @@ A simple web app for the Iron Lotus Sangha (Duluth, MN) to suggest, vote on, and
 
 **Live site:** [books.ironlot.us](https://books.ironlot.us)
 
+> **Handing this off?** Start with [HANDOFF.md](HANDOFF.md). It's written for non-technical sangha members and for whoever helps them.
+
 ---
 
 ## How It Works
 
 Members visit the site, enter the round password, and can:
 
-- **Suggest** a book for the group to read next
-- **Vote** by picking their top 3 choices (ranked-choice voting)
+- **Suggest** books for the group to read next (up to a per-round limit per person, 2 by default)
+- **Vote** by picking their top 3 choices (Borda count)
 - **Browse** submitted books and live results
 - **View past rounds** without a password
 
 An admin (signed in via Google) manages the round lifecycle: create rounds, open/close submissions and voting, and mark rounds complete.
 
-### Ranked-Choice Voting
+### Borda Count Voting
 
-Members pick their top 3 books in order. If no book has a majority of first-choice votes, the book with the fewest votes is eliminated and those voters' next choices are counted instead. This repeats until one book wins. The algorithm runs entirely client-side.
+Members pick their top 3 books in order: 1st choice = 3 points, 2nd = 2, 3rd = 1. The book with the most total points wins; ties go to the book with more 1st-choice votes, then 2nd-choice. The algorithm runs entirely client-side (`RCV.calculate()` in `app.js`, a name kept from the original ranked-choice version). See [VOTING-ALGORITHM-RECOMMENDATION.md](VOTING-ALGORITHM-RECOMMENDATION.md) for why.
+
+### Suggestion Limit
+
+Each round has a **Max Per Person** cap (Rounds sheet, column G; 2 by default for new rounds, blank = no limit). The backend enforces it by submitter name (case- and whitespace-insensitive), so it's honor-system, not identity-verified. Admins can raise it mid-round from the admin page. Duplicate titles (same main title, ignoring case/punctuation/subtitle) are rejected and don't count against the limit.
 
 ---
 
@@ -63,11 +69,11 @@ Members pick their top 3 books in order. If no book has a majority of first-choi
 | `suggest.html` | Form to submit a book suggestion with optional Goodreads link |
 | `vote.html` | Click-to-select top-3 ranked-choice voting interface |
 | `books.html` | Lists all suggested books for the current round |
-| `results.html` | Live RCV results with bar chart visualization of each elimination round |
+| `results.html` | Live Borda count results with a point-breakdown chart |
 | `history.html` | Past completed rounds (public, no password needed) |
 | `admin.html` | Admin panel — create rounds, toggle submissions/voting, review books, manage summaries |
 | `styles.css` | All visual styling (Georgia font, green accent, 20px base for accessibility) |
-| `app.js` | Shared JavaScript — API client, data cache, RCV algorithm, session management, UI helpers |
+| `app.js` | Shared JavaScript — API client, data cache, Borda count, session management, UI helpers |
 | `apps-script.js` | Backend code (reference copy of what runs in Google Apps Script) |
 
 ---
@@ -94,7 +100,7 @@ The Apps Script auto-creates these sheets on first use:
 
 | Sheet | Columns |
 |-------|---------|
-| **Rounds** | Round Name, Password, Submissions Open, Voting Open, Created, Completed |
+| **Rounds** | Round Name, Password, Submissions Open, Voting Open, Created, Completed, Max Per Person |
 | **Suggestions** | Timestamp, Round, Submitter Name, Book Title, Author, Link, Summary |
 | **Votes** | Timestamp, Round, Voter Name, Voter Email, Rankings JSON |
 | **History** | Round, Winner Title, Winner Author, Date Completed, Total Voters, Total Books |
@@ -139,7 +145,7 @@ Push to `main` on GitHub. Cloudflare Pages auto-deploys within ~30 seconds.
 
 ### Custom Domain
 
-The site is served at `books.ironlot.us` via Cloudflare DNS. The domain `ironlot.us` is managed through Cloudflare.
+The site is served at `books.ironlot.us` via Cloudflare DNS. The domain `ironlot.us` is registered at Namecheap with nameservers pointed at Cloudflare.
 
 ---
 
@@ -161,6 +167,7 @@ The site is served at `books.ironlot.us` via Cloudflare DNS. The domain `ironlot
 | Google (Sheet, Apps Script, Gmail, Cloud Console) | `iron.lotus.sangha.duluth@gmail.com` | All backend infrastructure |
 | GitHub | `ironlotus-duluth` | Source code repository |
 | Cloudflare | Iron Lotus email | Static hosting + DNS |
+| Namecheap | (registrar for `ironlot.us`) | Domain registration — renews 2027-05-28 |
 
 The SSH key for the GitHub account is configured on Jonathan's Mac at `~/.ssh/id_ironlotus` with host alias `github-ironlotus`.
 
@@ -189,7 +196,8 @@ See [MAINTENANCE.md](MAINTENANCE.md) for detailed troubleshooting, disaster reco
 
 - **Large text (20px base, Georgia serif)** — Designed for accessibility, particularly for older members of the sangha.
 - **Password gate instead of accounts** — Members don't need Google accounts or any login. One shared password per round keeps it simple.
-- **Top-3 voting instead of full ranking** — Easier for people unfamiliar with RCV. The algorithm handles partial ballots natively.
+- **Top-3 voting instead of full ranking** — Easier for people unfamiliar with ranked voting. Partial ballots (1 or 2 picks) are allowed.
+- **Per-person suggestion cap** — Added after Spring 2026 (13 books, one person suggested 7) to keep the list short enough that votes concentrate.
 - **Google Sheets as database** — Visible, editable, exportable. The admin can fix data issues directly without touching code.
 - **No build tooling** — Plain HTML/CSS/JS means anyone can edit the site without learning a framework or build system.
 - **Visible password field** — The round password is not sensitive (it's shared openly with the group), so it's shown as plain text to reduce friction.

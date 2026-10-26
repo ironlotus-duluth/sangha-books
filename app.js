@@ -277,13 +277,13 @@ const RCV = {
       const winnerStanding = result.standings[0];
       const label = votingOpen ? 'Current Leader' : 'Our Next Read';
       const voterLabel = votingOpen
-        ? `${result.totalVoters} member${result.totalVoters !== 1 ? 's' : ''} have voted so far`
+        ? `${result.totalVoters} member${result.totalVoters !== 1 ? 's have' : ' has'} voted so far`
         : `${result.totalVoters} member${result.totalVoters !== 1 ? 's' : ''} voted`;
       html += `
         <div class="results-hero">
           <div class="results-hero-label">${label}</div>
-          <div class="results-hero-title">${winnerBook.title}</div>
-          ${winnerBook.author ? `<div class="results-hero-author">by ${winnerBook.author}</div>` : ''}
+          <div class="results-hero-title">${escapeHtml(winnerBook.title)}</div>
+          ${winnerBook.author ? `<div class="results-hero-author">by ${escapeHtml(winnerBook.author)}</div>` : ''}
           <div class="results-hero-meta">${winnerStanding.score} point${winnerStanding.score !== 1 ? 's' : ''} · ${voterLabel}</div>
         </div>
       `;
@@ -303,8 +303,8 @@ const RCV = {
         <div class="standing-row${isWinner ? ' standing-winner' : ''}${s.score === 0 ? ' standing-zero' : ''}">
           <span class="standing-rank">${rank}</span>
           <span class="standing-info">
-            <span class="standing-title">${book.title}</span>
-            ${book.author ? `<span class="standing-author">by ${book.author}</span>` : ''}
+            <span class="standing-title">${escapeHtml(book.title)}</span>
+            ${book.author ? `<span class="standing-author">by ${escapeHtml(book.author)}</span>` : ''}
           </span>
           <span class="standing-votes">${s.score} pt${s.score !== 1 ? 's' : ''}</span>
         </div>
@@ -351,7 +351,7 @@ const RCV = {
 
       html += `
         <div class="tb-row${isWinner ? ' tb-winner' : ''}${s.score === 0 ? ' tb-zero' : ''}">
-          <div class="tb-label">${s.title}</div>
+          <div class="tb-label">${escapeHtml(s.title)}</div>
           <div class="tb-track">
             ${p.first ? `<div class="tb-seg tb-1st" style="width:${w1}%">${p.first}</div>` : ''}
             ${p.second ? `<div class="tb-seg tb-2nd" style="width:${w2}%">${p.second}</div>` : ''}
@@ -367,7 +367,7 @@ const RCV = {
     if (result.tiebroken) {
       const top = result.standings[0];
       const tied = result.standings.filter(s => s.score === top.score);
-      const tiedNames = tied.map(s => `"${s.title}"`).join(' and ');
+      const tiedNames = tied.map(s => `"${escapeHtml(s.title)}"`).join(' and ');
       let reason = '';
       if (tied.length >= 2 && tied[0].positions.first !== tied[1].positions.first) {
         reason = 'Won tiebreaker: most first-choice votes.';
@@ -386,6 +386,20 @@ const RCV = {
 };
 
 // ---------- UI HELPERS ----------
+
+// Book titles/authors are member-entered; escape before putting them in innerHTML
+function escapeHtml(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// Wording for the per-person suggestion cap (0 = no limit)
+function suggestionLimitText(limit) {
+  if (!limit) return '';
+  return `Each person can suggest up to ${limit} book${limit !== 1 ? 's' : ''} this round. ` +
+    `We're starting small so votes aren't spread too thin — if we end up with too few titles, we'll open it up for more.`;
+}
 
 function showMsg(id, text, type = 'error') {
   const el = document.getElementById(id);
