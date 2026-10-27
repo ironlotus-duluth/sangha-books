@@ -398,7 +398,7 @@ function escapeHtml(str) {
 function suggestionLimitText(limit) {
   if (!limit) return '';
   return `Each person can suggest up to ${limit} book${limit !== 1 ? 's' : ''} this round. ` +
-    `We're starting small so votes aren't spread too thin — if we end up with too few titles, we'll open it up for more.`;
+    `We're keeping the list short so the votes land closer together.`;
 }
 
 function showMsg(id, text, type = 'error') {

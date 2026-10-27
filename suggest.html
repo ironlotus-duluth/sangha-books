@@ -114,7 +114,9 @@
         lastName = data.submitterName;
         const result = await API.submitSuggestion(data);
         if (result.error) {
-          showMsg('msg', result.error);
+          showMsg('msg', result.limitReached
+            ? 'You\'ve already suggested the most books allowed this round. Thank you!'
+            : result.error);
           submitBtn.disabled = false;
           submitBtn.textContent = 'Submit Suggestion';
           return;
@@ -128,7 +130,7 @@
         document.getElementById('anotherWrap').classList.toggle('hidden', !!atLimit);
         const limitNote = document.getElementById('limitReachedNote');
         if (atLimit) {
-          limitNote.textContent = `That's your ${result.limit} for now — thank you! If we need more titles, we'll let everyone know.`;
+          limitNote.textContent = `That's your ${result.limit} — thank you!`;
           limitNote.classList.remove('hidden');
         } else {
           limitNote.classList.add('hidden');
