@@ -91,8 +91,11 @@ You need to be able to sign in to the Google account
      **Suggestions** tab, and delete that row.
 4. **Open voting.** On the admin page, click **Close Submissions**, then
    **Open Voting**. Tell the group it is time to vote.
-5. **Wait about a week.** The **Results** page shows live standings and who has
-   voted.
+5. **Wait about two weeks.** While voting is open, members only see *who* has
+   voted. The standings stay hidden so they can't sway anyone's ballot. Admins
+   can watch the live standings under **Live Results** on the admin page.
+   As soon as you click **Close Voting**, the full results appear on the
+   **Results** page for everyone.
 6. **Finish.** Click **Complete Round**. This closes voting and moves the round
    to "Past Rounds", which anyone can see without a password.
 

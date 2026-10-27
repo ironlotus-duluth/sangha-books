@@ -130,6 +130,15 @@
       <div id="bookReviewList"></div>
     </div>
 
+    <!-- Live Results (admin only; members can't see standings while voting is open) -->
+    <div id="adminResultsSection" class="hidden" style="margin-bottom:2rem;">
+      <h2 style="margin-bottom:0.5rem;">Live Results <span style="font-size:0.9rem; font-weight:normal; color:#666;">(only admins can see these while voting is open)</span></h2>
+      <div id="adminResults"></div>
+      <div style="margin-top:1rem;">
+        <button class="btn btn-outline btn-small" onclick="loadAdminResults()">Refresh results</button>
+      </div>
+    </div>
+
     <!-- Existing Rounds -->
     <h2 style="margin-bottom:1rem;">Rounds</h2>
     <div id="roundsList"></div>
@@ -141,6 +150,7 @@
   <script>
     let adminToken = null;
     let activeRoundName = null;
+    let activeRoundPassword = null;
 
     // Set up Google Sign-In client ID
     document.getElementById('g_id_onload').setAttribute('data-client_id', GOOGLE_CLIENT_ID);
@@ -178,13 +188,38 @@
         const activeRound = rounds.find(r => !r.completed);
         if (activeRound) {
           activeRoundName = activeRound.name;
+          activeRoundPassword = activeRound.password;
           loadBookReview(activeRound);
+          loadAdminResults();
         } else {
           document.getElementById('bookReviewSection').classList.add('hidden');
+          document.getElementById('adminResultsSection').classList.add('hidden');
         }
       } catch (err) {
         loader.classList.add('hidden');
         showMsg('gateMsg', 'Could not connect. Please try again.');
+      }
+    }
+
+    async function loadAdminResults() {
+      const section = document.getElementById('adminResultsSection');
+      const container = document.getElementById('adminResults');
+      try {
+        const [votes, books] = await Promise.all([
+          API.adminGet('adminGetVotes', adminToken, { round: activeRoundName }),
+          API.get('getSuggestions', { round: activeRoundName, password: activeRoundPassword })
+        ]);
+        if (!Array.isArray(votes) || !votes.length || !Array.isArray(books)) {
+          section.classList.add('hidden');
+          if (votes && votes.error) adminError(votes);
+          return;
+        }
+        section.classList.remove('hidden');
+        const round = _cachedRounds.find(r => r.name === activeRoundName) || {};
+        const result = RCV.calculate(votes, books.map(b => b.title));
+        RCV.renderResults(container, result, books, round.votingOpen);
+      } catch (e) {
+        section.classList.add('hidden');
       }
     }
 

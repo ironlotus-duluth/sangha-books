@@ -197,6 +197,7 @@ See [MAINTENANCE.md](MAINTENANCE.md) for detailed troubleshooting, disaster reco
 - **Large text (20px base, Georgia serif)** — Designed for accessibility, particularly for older members of the sangha.
 - **Password gate instead of accounts** — Members don't need Google accounts or any login. One shared password per round keeps it simple.
 - **Top-3 voting instead of full ranking** — Easier for people unfamiliar with ranked voting. Partial ballots (1 or 2 picks) are allowed.
+- **Standings hidden while voting is open** — Added Fall 2026. With Borda count, visible standings invite tactical voting (leaving a front-runner's rival off your ballot). The backend withholds rankings from `getVotes` until voting closes; admins see live results via `adminGetVotes`.
 - **Per-person suggestion cap** — Added after Spring 2026 (13 books, one person suggested 7) to keep the list short enough that votes concentrate.
 - **Google Sheets as database** — Visible, editable, exportable. The admin can fix data issues directly without touching code.
 - **No build tooling** — Plain HTML/CSS/JS means anyone can edit the site without learning a framework or build system.

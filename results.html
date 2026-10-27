@@ -40,6 +40,14 @@
 
     document.getElementById('refreshBtn').addEventListener('click', loadResults);
 
+    function showVoters(votes) {
+      const names = votes.map(v => v.voter).filter(Boolean);
+      if (names.length) {
+        document.getElementById('voterNames').textContent = names.join(', ');
+        document.getElementById('voterList').classList.remove('hidden');
+      }
+    }
+
     async function loadResults() {
       showLoading('results', 'Loading results...');
       document.getElementById('voterList').classList.add('hidden');
@@ -59,6 +67,23 @@
           return;
         }
 
+        // Standings stay hidden while voting is open so they can't sway anyone's ballot
+        if (votingOpen) {
+          document.getElementById('pageTitle').textContent = `Voting — ${Session.getRound()}`;
+          document.getElementById('results').innerHTML = `
+            <div class="results-hero">
+              <div class="results-hero-label">Voting is open</div>
+              <div class="results-hero-title">${votes.length} member${votes.length !== 1 ? 's have' : ' has'} voted so far</div>
+              <div class="results-hero-meta">
+                Results are hidden while voting is open, so everyone can vote their true preferences.
+                They'll appear here as soon as voting closes.
+              </div>
+            </div>
+            <p style="text-align:center; margin-top:1rem;"><a href="vote.html">Haven't voted yet? Vote now &rarr;</a></p>`;
+          showVoters(votes);
+          return;
+        }
+
         if (!votes.length) {
           document.getElementById('results').innerHTML =
             '<p class="msg msg-info">No votes have been cast yet. Check back once voting begins!</p>';
@@ -69,12 +94,7 @@
         const result = RCV.calculate(votes, candidates);
         RCV.renderResults(document.getElementById('results'), result, books, votingOpen);
 
-        // Show voter list
-        const names = votes.map(v => v.voter).filter(Boolean);
-        if (names.length) {
-          document.getElementById('voterNames').textContent = names.join(', ');
-          document.getElementById('voterList').classList.remove('hidden');
-        }
+        showVoters(votes);
 
       } catch (err) {
         showMsg('msg', 'Could not load results. Please refresh and try again.');

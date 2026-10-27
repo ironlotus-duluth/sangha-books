@@ -181,8 +181,8 @@ const API = {
   },
 
   // Admin endpoints
-  async adminGet(action, token) {
-    const params = new URLSearchParams({ action, token });
+  async adminGet(action, token, extraParams = {}) {
+    const params = new URLSearchParams({ action, token, ...extraParams });
     const resp = await fetch(`${API_URL}?${params}`);
     return resp.json();
   },

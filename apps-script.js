@@ -231,10 +231,28 @@ function doGet(e) {
         }
         const all = sheetToObjects(getSheet('Votes'));
         const roundVotes = all.filter(v => v['Round'] === roundName);
-        result = roundVotes.map(v => ({
-          voter: v['Voter Name'],
-          rankings: JSON.parse(v['Rankings JSON'] || '[]')
-        }));
+        // Rankings stay hidden while voting is open so standings can't sway
+        // anyone's ballot; members still see who has voted. Admins use adminGetVotes.
+        const vRound = getRoundByName(roundName);
+        const hideRankings = isOpen(vRound['Voting Open']) && !vRound['Completed'];
+        result = roundVotes.map(v => hideRankings
+          ? { voter: v['Voter Name'] }
+          : { voter: v['Voter Name'], rankings: JSON.parse(v['Rankings JSON'] || '[]') });
+        break;
+      }
+
+      case 'adminGetVotes': {
+        if (!verifyGoogleToken(e.parameter.token)) {
+          result = { error: 'Unauthorized.' };
+          break;
+        }
+        const aRoundName = e.parameter.round;
+        result = sheetToObjects(getSheet('Votes'))
+          .filter(v => v['Round'] === aRoundName)
+          .map(v => ({
+            voter: v['Voter Name'],
+            rankings: JSON.parse(v['Rankings JSON'] || '[]')
+          }));
         break;
       }
 
@@ -426,7 +444,7 @@ function doPost(e) {
               'Thank you for voting in "' + data.round + '"!\n\n' +
               'Here is how you ranked the books:\n\n' +
               rankList + '\n\n' +
-              (resultsUrl ? 'Check the current standings anytime:\n' + resultsUrl + '\n\n' : '') +
+              (resultsUrl ? 'Results will be revealed once voting closes. You can see them here when it does:\n' + resultsUrl + '\n\n' : '') +
               'With gratitude,\nIron Lotus Sangha',
               {
                 name: 'Iron Lotus Sangha',
@@ -435,7 +453,7 @@ function doPost(e) {
                   '<p>Thank you for voting in <strong>"' + escapeHtml(data.round) + '"</strong>!</p>' +
                   '<p>Here is how you ranked the books:</p>' +
                   '<ol>' + data.rankings.map(t => '<li>' + escapeHtml(t) + '</li>').join('') + '</ol>' +
-                  (resultsUrl ? '<p><a href="' + escapeHtml(resultsUrl) + '">Check the current standings anytime</a></p>' : '') +
+                  (resultsUrl ? '<p>Results will be revealed once voting closes. <a href="' + escapeHtml(resultsUrl) + '">You can see them here</a> when it does.</p>' : '') +
                   '<p>With gratitude,<br>Iron Lotus Sangha</p>'
               }
             );
